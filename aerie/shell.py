@@ -284,6 +284,8 @@ class AerieApp(Gtk.Application):
         self.hub.set_visible(True)
         self.hub.present()
         self.hub.webview.grab_focus()
+        if os.environ.get("AERIE_DEBUG_KEYS"):
+            GLib.timeout_add(1500, lambda: log(f"hub active: {self.hub.is_active()}, page focused: {self.hub.webview.has_focus()}") or False)
         surfaces.run_js(self.hub.webview, f"window.hub && window.hub.open({json.dumps(tab)})")
         return False
 

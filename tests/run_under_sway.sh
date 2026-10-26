@@ -66,8 +66,11 @@ bin/aerie --hub --tab=wallpaper >>"$OUT/aerie.out" 2>&1
 shot hub-wallpaper 3
 bin/aerie --hub --tab=stats >>"$OUT/aerie.out" 2>&1
 shot hub-stats 3
-wtype -k Escape; sleep 2
-grep "hub says" "$HOME/.cache/aerie.log" | tail -3 >>"$LOG"
+bin/aerie --hub --tab=apps >>"$OUT/aerie.out" 2>&1; sleep 3
+wtype -d 60 "vim"; sleep 2
+shot hub-apps 1
+wtype -k Escape; sleep 3
+grep "hub says\|hub active" "$HOME/.cache/aerie.log" | tail -6 >>"$LOG"
 grep -q "hub says: close" "$HOME/.cache/aerie.log" && say "Esc closed the hub" || say "FAIL: Esc didn't close the hub"
 shot hub-closed 1
 
@@ -88,8 +91,9 @@ if grep -q " locked$" "$HOME/.cache/aerie-lock.log" 2>/dev/null; then say "the s
 wtype -d 60 "wrong-password"; sleep 0.5; wtype -k Return
 shot wrong-password 4
 grep -c "page says: key" "$HOME/.cache/aerie-lock.log" | sed "s/^/keys that reached the lock screen: /" >>"$LOG"; grep "page says" "$HOME/.cache/aerie-lock.log" | tail -4 >>"$LOG"
+for _ in $(seq 30); do grep -q "wrong password" "$HOME/.cache/aerie-lock.log" && break; sleep 0.5; done
 wtype -d 60 "aerie-test-pw"; sleep 0.5; wtype -k Return
-sleep 4
+for _ in $(seq 40); do kill -0 "$LOCK" 2>/dev/null || break; sleep 0.5; done
 if grep -q "wrong password" "$HOME/.cache/aerie-lock.log" 2>/dev/null; then say "a wrong password was refused"; else say "FAIL: the wrong password wasn't refused"; fi
 if kill -0 "$LOCK" 2>/dev/null; then say "FAIL: still locked after the right password"; elif grep -q "^.* unlocked$" "$HOME/.cache/aerie-lock.log"; then say "unlocked with the right password"; else say "FAIL: the lock screen quit without unlocking"; fi
 shot unlocked 1

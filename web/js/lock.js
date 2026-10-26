@@ -48,6 +48,7 @@ $('#form').addEventListener('submit', e => {
   $('#form').classList.add('checking');
   $('#status').textContent = 'Checking…';
   post({ type: 'unlock', password: pw });
+  $('#password').value = ''; // typing during the check starts a fresh try
   if (!window.webkit?.messageHandlers?.aerie) setTimeout(() => window.lockScreen.failed('Not running inside Aerie'), 400);
 });
 
@@ -66,7 +67,6 @@ window.lockScreen = {
     void f.offsetWidth;
     f.classList.add('wrong');
     $('#status').textContent = message || 'Wrong password';
-    $('#password').value = '';
     $('#password').focus();
   },
   success() {
