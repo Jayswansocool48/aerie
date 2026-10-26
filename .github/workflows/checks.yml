@@ -62,9 +62,9 @@ jobs:
       - name: Show what happened
         if: always()
         run: |
-          while IFS= read -r line; do echo "::notice title=Aerie run::$line"; done < shots/run.log || true
-          for f in shots/aerie.log shots/aerie-lock.log shots/aerie.out shots/lock.out; do
-            [ -s "$f" ] && tail -n 25 "$f" | while IFS= read -r line; do echo "::notice title=$(basename "$f")::$line"; done
+          # one note per file (GitHub shows at most 10 notes per step)
+          for f in shots/run.log shots/aerie.log shots/aerie-lock.log shots/aerie.out shots/lock.out; do
+            [ -s "$f" ] && echo "::notice title=$(basename "$f")::$(tail -n 40 "$f" | sed ':a;N;$!ba;s/%/%25/g;s/\r//g;s/\n/%0A/g')"
           done || true
 
       - name: Publish screenshots to the ci-screenshots branch
