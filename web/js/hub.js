@@ -404,5 +404,7 @@ function power() {
   box.querySelector('button').focus();
 }
 
+post({ type: 'ready' });
+
 // opened directly in a browser (testing): show it right away
 if (!window.webkit?.messageHandlers?.aerie) window.hub.open(new URLSearchParams(location.search).get('tab'));

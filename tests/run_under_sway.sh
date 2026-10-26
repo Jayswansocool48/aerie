@@ -5,6 +5,7 @@ OUT="$PWD/shots"
 mkdir -p "$OUT" "$XDG_RUNTIME_DIR"
 chmod 700 "$XDG_RUNTIME_DIR"
 export HOME="$PWD/build/home"
+unset XDG_CONFIG_HOME XDG_DATA_HOME XDG_CACHE_HOME  # GitHub sets these; use the test home
 mkdir -p "$HOME/.config/aerie"
 LOG="$OUT/run.log"
 : > "$LOG"
@@ -65,6 +66,7 @@ shot hub-wallpaper 3
 bin/aerie --hub --tab=stats >>"$OUT/aerie.out" 2>&1
 shot hub-stats 3
 wtype -k Escape; sleep 2
+grep "hub says" "$HOME/.cache/aerie.log" | tail -3 >>"$LOG"
 grep -q "hub says: close" "$HOME/.cache/aerie.log" && say "Esc closed the hub" || say "FAIL: Esc didn't close the hub"
 shot hub-closed 1
 
@@ -82,10 +84,10 @@ bin/aerie-lock --now >"$OUT/lock.out" 2>&1 &
 LOCK=$!
 shot locked 8
 if grep -q " locked$" "$HOME/.cache/aerie-lock.log" 2>/dev/null; then say "the screen locked"; else say "FAIL: the screen did not lock"; fi
-wtype "wrong-password"; wtype -k Return
+wtype -d 60 "wrong-password"; sleep 0.5; wtype -k Return
 shot wrong-password 4
 grep "page says" "$HOME/.cache/aerie-lock.log" | tail -3 >>"$LOG"
-wtype "aerie-test-pw"; wtype -k Return
+wtype -d 60 "aerie-test-pw"; sleep 0.5; wtype -k Return
 sleep 4
 if grep -q "wrong password" "$HOME/.cache/aerie-lock.log" 2>/dev/null; then say "a wrong password was refused"; else say "FAIL: the wrong password wasn't refused"; fi
 if kill -0 "$LOCK" 2>/dev/null; then say "FAIL: still locked after the right password"; elif grep -q "^.* unlocked$" "$HOME/.cache/aerie-lock.log"; then say "unlocked with the right password"; else say "FAIL: the lock screen quit without unlocking"; fi

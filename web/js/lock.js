@@ -134,4 +134,5 @@ async function battery() {
   setInterval(battery, 30000);
   wake();
   $('#password').focus();
+  post({ type: 'ready' });
 })();
