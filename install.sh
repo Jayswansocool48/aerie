@@ -69,6 +69,8 @@ case "${1:-}" in
     say "Removing Aerie (asks for your password)"
     aerie --quit 2>/dev/null || true
     aerie --restore-cosmic-look 2>/dev/null || true
+    aerie --undo-extras 2>/dev/null || true
+    sudo /usr/lib/aerie/bin/aerie-system lockscreen-off 2>/dev/null || true
     remove_old_copies
     sudo apt-get purge -y aerie || true
     rm -rf "$HOME/.config/aerie" "$HOME/.local/share/aerie" "$HOME/.cache/aerie.log" \

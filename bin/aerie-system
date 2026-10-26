@@ -1,0 +1,100 @@
+#!/usr/bin/python3 -I
+"""System changes Aerie makes for you, after you confirm with your password (via pkexec).
+
+It only knows these fixed actions and takes no file names, so it can't be used to
+change anything else:
+
+  lockscreen-on       Let Aerie be the lock screen: COSMIC's lock screen program is set
+                      aside with dpkg-divert (the Debian way, so updates of COSMIC keep
+                      working) and a small switch takes its name. People who haven't turned
+                      on the Aerie lock screen, and the login screen, still get COSMIC's own.
+  lockscreen-off      Put COSMIC's lock screen back exactly as it was.
+  clipboard-on/off    For older COSMIC versions: let apps read the clipboard (needed for
+                      clipboard history). Adds/removes COSMIC_DATA_CONTROL_ENABLED=1 in
+                      /etc/environment. Takes effect after logging out and in.
+  status              Prints what is on.
+"""
+
+import os
+import shutil
+import subprocess
+import sys
+from pathlib import Path
+
+GREETER = Path("/usr/bin/cosmic-greeter")
+DIVERTED = Path("/usr/bin/cosmic-greeter.real")
+WRAPPER_SRC = Path("/usr/lib/aerie/bin/cosmic-greeter-wrapper")
+MARK = "# Added by Aerie (clipboard history); remove to undo"
+ENV_LINE = "COSMIC_DATA_CONTROL_ENABLED=1"
+ENVIRONMENT = Path("/etc/environment")
+
+
+def run(*cmd):
+    r = subprocess.run(cmd, capture_output=True, text=True)
+    if r.returncode != 0:
+        raise SystemExit(f"aerie-system: {' '.join(cmd)} failed: {r.stderr.strip()}")
+    return r.stdout
+
+
+def diverted():
+    out = subprocess.run(["dpkg-divert", "--list", str(GREETER)], capture_output=True, text=True).stdout
+    return "cosmic-greeter.real" in out
+
+
+def lockscreen_on():
+    if not WRAPPER_SRC.is_file():
+        raise SystemExit("aerie-system: Aerie's lock screen switch is missing; reinstall Aerie")
+    if not diverted():
+        if not GREETER.exists():
+            raise SystemExit("aerie-system: COSMIC's lock screen (cosmic-greeter) isn't installed")
+        run("dpkg-divert", "--local", "--rename", "--divert", str(DIVERTED), "--add", str(GREETER))
+    tmp = GREETER.with_name(".cosmic-greeter.aerie-tmp")
+    shutil.copyfile(WRAPPER_SRC, tmp)
+    os.chmod(tmp, 0o755)
+    os.replace(tmp, GREETER)
+    print("Aerie lock screen switch is on")
+
+
+def lockscreen_off():
+    if diverted():
+        if GREETER.exists():
+            GREETER.unlink()
+        run("dpkg-divert", "--local", "--rename", "--remove", str(GREETER))
+    print("COSMIC's lock screen is back")
+
+
+def clipboard(on):
+    try:
+        lines = ENVIRONMENT.read_text().splitlines()
+    except FileNotFoundError:
+        lines = []
+    lines = [ln for ln in lines if ln.strip() not in (MARK, ENV_LINE)]
+    if on:
+        lines += [MARK, ENV_LINE]
+    tmp = ENVIRONMENT.with_name(".environment.aerie-tmp")
+    tmp.write_text("\n".join(lines) + "\n")
+    os.chmod(tmp, 0o644)
+    os.replace(tmp, ENVIRONMENT)
+    print("clipboard access " + ("on" if on else "off") + " (log out and in to apply)")
+
+
+def status():
+    env = ENVIRONMENT.read_text() if ENVIRONMENT.exists() else ""
+    print(f"lockscreen={'on' if diverted() else 'off'}")
+    print(f"clipboard={'on' if ENV_LINE in env.splitlines() else 'off'}")
+
+
+ACTIONS = {
+    "lockscreen-on": lockscreen_on,
+    "lockscreen-off": lockscreen_off,
+    "clipboard-on": lambda: clipboard(True),
+    "clipboard-off": lambda: clipboard(False),
+    "status": status,
+}
+
+if __name__ == "__main__":
+    if len(sys.argv) != 2 or sys.argv[1] not in ACTIONS:
+        raise SystemExit("usage: aerie-system " + "|".join(ACTIONS))
+    if sys.argv[1] != "status" and os.geteuid() != 0:
+        raise SystemExit("aerie-system: needs to run as root (Aerie uses pkexec)")
+    ACTIONS[sys.argv[1]]()

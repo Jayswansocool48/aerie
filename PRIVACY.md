@@ -1,8 +1,8 @@
 # Privacy policy
 
-_Last updated: October 13, 2026 (version 1.0.0)_
+_Last updated: October 26, 2026 (version 2.0.0)_
 
-Aerie runs on your computer. It only goes online for two optional features you turn on yourself: the design assistant (if you choose Claude or ChatGPT) and the online library.
+Aerie runs on your computer. It only goes online for optional features you use yourself: the design assistant (if you choose Claude or ChatGPT), the online library, the speed test, and web wallpapers or web sites you add.
 
 - **No data is collected by us.** There are no accounts, sign-ups, analytics, telemetry, crash reporting, ads or tracking. We (the publisher) never receive anything from your computer.
 - **Offline unless you use the assistant or the online library.** Aerie's screen is a page served by its own small server that only listens on `127.0.0.1` (your own computer) and needs a random key that changes every time Aerie starts. Updates are downloaded by Pop!_OS's normal updater / the COSMIC Store, not by Aerie.
@@ -18,11 +18,18 @@ Aerie runs on your computer. It only goes online for two optional features you t
 - **Changes to COSMIC:** only if you use the COSMIC tab or agree to a preset's matching taskbar. This can change COSMIC's glass, window, panel and dock settings, which applets your panel and dock show, and your pinned apps. Aerie saves your original COSMIC settings in `~/.local/share/aerie/cosmic-backup.json` first and puts them back when you click Restore, delete your data, or uninstall.
 - **Profile picture:** if you change it from the Lock screen section, Aerie hands the picture to your system's account service (AccountsService, as COSMIC Settings does) and keeps a copy of your previous picture in `~/.local/share/aerie/` so Restore can put it back.
 - **Lock screen:** if you set it from the COSMIC tab, the picture is saved in `~/.local/share/aerie/lockscreen/` and set as COSMIC's wallpaper (COSMIC's lock and login screens show that picture). Restore, delete-data and uninstall put your original wallpaper back.
+- **Your wallpapers:** files you add are copied to `~/.local/share/aerie/wallpapers/`. Aerie looks in Steam's folders for Wallpaper Engine wallpapers you subscribed to (reading only their files, never changing them, never contacting Steam). Wallpaper Engine scenes are unpacked once into `~/.local/share/aerie/cache/`.
+- **Web wallpapers and web sites:** these are other people's code. They run in a sandbox with a private, throw-away browser profile: they can't see Aerie's settings, your files, your other web sites' cookies, your camera, microphone or location. A web site wallpaper is loaded live from the internet, so that site sees an ordinary visit from your computer and its own privacy policy applies; some web wallpapers also load things from the internet themselves.
+- **Speed test (hub → Stats):** only when you press "Run speed test", Aerie downloads and uploads test data with Cloudflare's speed test service (`speed.cloudflare.com`), which sees your internet address like any web site. Nothing about you or your computer is sent. [Cloudflare's privacy policy](https://www.cloudflare.com/privacypolicy/) applies.
+- **Clipboard history (off until you turn it on):** while on, the last 200 things you copy (text and pictures) are saved in `~/.local/share/aerie/clipboard/` on this computer only, readable only by you. Items that password managers mark as secret are never saved. Turning it off stops it; "Clear clipboard history", delete-data and uninstall delete it.
+- **Lock screen (off until you turn it on):** your password is handed to your system's PAM (the same check as logging in) and never stored, logged or sent anywhere. The lock screen shows your name and profile picture from your account, what's playing and your battery level. Turning it on makes one system change you confirm with your password (see the README), which is undone when you turn it off, remove the switch or uninstall.
+- **Hub controls:** Wi-Fi, Bluetooth, sound, brightness, dark mode and do-not-disturb are read and changed through the same system services COSMIC uses. "Top apps" reads program names and their memory use, only to show them.
+- **Keyboard shortcuts:** if you turn them on, Aerie adds Super+D and Super+Shift+W to COSMIC's custom shortcuts (`~/.config/cosmic/com.system76.CosmicSettings.Shortcuts/v1/custom`) and removes only those when you turn them off or uninstall.
 - **Sound:** all sounds are generated on your computer; Aerie never records or listens to audio.
 - **Cookies:** none. Aerie uses no cookies or tracking storage, so there is no cookie banner.
 - **Children:** Aerie collects no personal data from anyone, including children. The assistant's Claude and ChatGPT options require an account with those companies, which set their own age rules; children should use Ollama or no assistant.
 - **Moved from Deskscape:** on first start Aerie copies your Deskscape setup and files from `~/.config/deskscape` and `~/.local/share/deskscape` into its own folders. The old folders are left alone; you can delete them.
-- **Deleting your data:** Settings → **Delete all my Aerie data** removes your setup, files you added, saved API keys and the autostart entry, and restores your original COSMIC look. Settings → **Uninstall Aerie** removes the app and all of that data in one step (and the update source, if one was added).
+- **Deleting your data:** Studio → Settings → **Delete all my Aerie data** removes your setup, wallpapers and files you added, clipboard history, saved API keys, the hub shortcuts, your lock screen choice and the autostart entry, and restores your original COSMIC look. Studio → Settings → **Uninstall Aerie** removes the app and all of that data in one step, takes the lock screen switch away (and the update source, if one was added).
 - **Links and web search:** Quick links, the search widget's optional web search, and 3D objects set to open a website open them in your normal browser, whose own privacy policy applies.
 
 Publisher: Jayswansocool48 · Questions: https://github.com/Jayswansocool48/aerie/issues

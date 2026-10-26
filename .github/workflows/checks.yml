@@ -1,0 +1,58 @@
+# Runs Aerie for real on every push: under a headless Wayland desktop (sway, which supports
+# the same layer-shell and session-lock protocols as COSMIC), it starts the wallpaper, opens
+# the hub and Aerie Studio, locks and unlocks the screen with a password, and saves
+# screenshots and logs (Actions → Checks → the run → Artifacts).
+name: Checks
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  run-aerie:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Unit tests
+        run: |
+          python3 tests/test_desktop_watch.py
+          python3 tests/test_wetex.py
+          python3 tests/test_library.py
+
+      - name: Install a headless desktop and Aerie's libraries
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y --no-install-recommends sway grim wtype wl-clipboard xwayland \
+            python3-gi gir1.2-gtk-4.0 gir1.2-webkit-6.0 libgl1-mesa-dri mesa-utils \
+            meson ninja-build gcc pkg-config libgtk-4-dev libwayland-dev wayland-protocols \
+            gobject-introspection libgirepository1.0-dev fonts-noto-cjk dbus-x11 \
+            gstreamer1.0-libav gstreamer1.0-plugins-good
+
+      - name: Build gtk4-layer-shell
+        run: |
+          set -e
+          git clone --quiet --depth 1 --branch v1.3.0 https://github.com/wmww/gtk4-layer-shell.git /tmp/gls
+          meson setup /tmp/gls/_build /tmp/gls --prefix="$PWD/build/layer-shell-v1.3.0" --libdir=lib \
+            -Dexamples=false -Ddocs=false -Dtests=false -Dsmoke-tests=false -Dvapi=false -Dintrospection=true
+          ninja -C /tmp/gls/_build install >/dev/null
+          ls build/layer-shell-v1.3.0/lib/girepository-1.0
+
+      - name: Run Aerie under sway
+        env:
+          XDG_RUNTIME_DIR: /tmp/rt
+          WLR_BACKENDS: headless
+          WLR_RENDERER: pixman
+          WLR_LIBINPUT_NO_DEVICES: "1"
+          WEBKIT_DISABLE_DMABUF_RENDERER: "1"
+          LIBGL_ALWAYS_SOFTWARE: "1"
+        run: tests/run_under_sway.sh
+
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: aerie-screenshots
+          path: shots/

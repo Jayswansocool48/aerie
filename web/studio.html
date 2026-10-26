@@ -1,0 +1,39 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; img-src 'self' blob: data:; media-src 'self' blob:; style-src 'self' 'unsafe-inline'; font-src 'self'; script-src 'self'; frame-src 'self' http://127.0.0.1:*; connect-src 'self' blob: data:">
+  <title>Aerie Studio</title>
+  <link rel="stylesheet" href="css/fonts.css">
+  <link rel="stylesheet" href="css/aerie.css">
+  <link rel="stylesheet" href="css/ui.css">
+  <link rel="stylesheet" href="css/studio.css">
+</head>
+<body class="ui studio">
+  <a class="skip" href="#main">Skip to content</a>
+  <aside class="st-side" aria-label="Aerie Studio">
+    <div class="st-brand">
+      <img src="img/aerie.svg" alt="">
+      <div><div class="display">Aerie</div><div class="kana">スタジオ</div></div>
+    </div>
+    <nav id="nav" class="st-nav" aria-label="Pages"></nav>
+    <div class="st-foot small muted" id="foot"></div>
+  </aside>
+  <main class="st-main" id="main" tabindex="-1">
+    <header class="st-head">
+      <div><h1 id="title"></h1><p class="muted" id="subtitle"></p></div>
+      <div class="st-head-tools" id="tools"></div>
+    </header>
+    <div id="page" class="st-page"></div>
+  </main>
+  <aside class="st-preview" aria-label="Preview">
+    <div class="pv-head"><span class="kana">プレビュー</span><span class="small muted" id="pv-label">Preview</span></div>
+    <div class="pv-frame"><iframe id="preview" title="Live preview of your desktop" tabindex="-1"></iframe></div>
+    <div id="details" class="pv-details"></div>
+  </aside>
+  <div id="drop" class="st-drop" hidden><div><span id="drop-icon"></span><b>Drop to add to your library</b><small>Pictures, videos, Blender .glb scenes, web pages, Wallpaper Engine folders or .zip files</small></div></div>
+  <div class="toast" id="toast" role="status" aria-live="polite" hidden></div>
+  <script type="module" src="js/studio.js"></script>
+</body>
+</html>

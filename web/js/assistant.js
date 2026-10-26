@@ -44,6 +44,12 @@ function describe(spec) {
   return spec.type === 'bool' ? 'true|false' : '"#rrggbb"';
 }
 
+let WALLPAPERS = [];
+/** Wallpapers the assistant may switch to (titles and kinds only). */
+export function setWallpaperChoices(items) {
+  WALLPAPERS = (items || []).filter(i => i.rating !== 'mature').slice(0, 60).map(i => ({ id: i.id, title: i.title, kind: i.type }));
+}
+
 /** What the AI needs to know: the allowed changes, and the current desktop (no personal content). */
 export function buildContext(cfg) {
   const scene = clone(cfg.scene);
@@ -63,6 +69,7 @@ export function buildContext(cfg) {
     '{"op":"moveWidget","type":<type>,"x":0-100,"y":0-100}   {"op":"removeWidget","type":<type>}',
     `{"op":"addObject","shape":${ASSISTANT_SHAPES.map(s => JSON.stringify(s)).join('|')},"material":${Object.keys(MATERIALS).map(m => JSON.stringify(m)).join('|')},"color":"#rrggbb","x":-6..6,"y":-3..3,"z":-8..2,"scale":0.2..4,"glow":0..2,"spin":true|false}`,
     '{"op":"removeObject","name":<name>}   {"op":"removeObject","all":true}',
+    `{"op":"wallpaper","id":<id>}   (switch to one of these wallpapers: ${JSON.stringify(WALLPAPERS)}; the 3D objects, particles, lighting and fog only show with "preset" looks)`,
     `{"op":"cosmic","layout":${Object.keys(TASKBAR_LAYOUTS).map(l => JSON.stringify(l)).join('|')},"dark":true|false,"frostedWindows":true|false}   (the real COSMIC panel/dock/theme; only if asked; any field optional)`,
     'Widget types: ' + Object.entries(WIDGET_TYPES).map(([k, v]) => `${k} (${v})`).join(', '),
     'Screen layout tip: keep widgets from overlapping; the area around x 30-70, y 25-75 is where 3D objects usually sit.',
@@ -109,7 +116,7 @@ export function applyChanges(cfg, changes) {
     switch (c.op) {
       case 'preset': {
         if (!PRESETS[c.name]) { skipped++; break; }
-        Object.assign(cfg, presetConfig(c.name, cfg.general), { presetName: c.name });
+        Object.assign(cfg, presetConfig(c.name, cfg.general), { presetName: c.name, wallpaper: { type: 'scene' }, screens: {}, wallpaperProps: cfg.wallpaperProps || {} });
         done.add(`switched to ${c.name}`);
         break;
       }
@@ -121,6 +128,14 @@ export function applyChanges(cfg, changes) {
         setPath(cfg, c.path, value);
         const group = Object.keys(LABELS).find(k => c.path.startsWith(k));
         done.add(`changed the ${LABELS[group] || c.path.split('.').pop()}`);
+        break;
+      }
+      case 'wallpaper': {
+        const pick = (WALLPAPERS || []).find(w => w.id === c.id);
+        if (!pick) { skipped++; break; }
+        cfg.wallpaper = { type: 'library', id: pick.id };
+        cfg.screens = {};
+        done.add(`set the wallpaper to ${pick.title}`);
         break;
       }
       case 'addWidget': {

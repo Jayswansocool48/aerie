@@ -1,0 +1,47 @@
+/* The lock screen: your wallpaper, a big clock and a password box. */
+html, body.lock { height: 100%; overflow: hidden; background: #000; }
+#wall { position: fixed; inset: 0; width: 100%; height: 100%; border: 0; pointer-events: none; transition: filter .6s var(--ease), transform .6s var(--ease); }
+body.lock.web-wallpaper { background: transparent; }
+body.lock.web-wallpaper #wall { display: none; }
+.shade { position: fixed; inset: 0; background: linear-gradient(180deg, rgba(5, 6, 14, var(--dim, .25)), rgba(5, 6, 14, calc(var(--dim, .25) + .25)));
+  pointer-events: none; transition: opacity .6s; }
+.preview-tag { position: fixed; top: 16px; left: 50%; translate: -50% 0; z-index: 10; padding: 8px 16px; border-radius: 99px; background: rgba(255, 197, 138, .92);
+  color: #1b1208; font-weight: 600; font-size: 13px; }
+.lockui { position: fixed; inset: 0; display: grid; grid-template-rows: 1fr auto; justify-items: center; padding: 12vh 24px 14vh; color: #fff;
+  text-shadow: 0 2px 18px rgba(0, 0, 0, .45); transition: opacity .5s var(--ease); }
+.when { text-align: center; align-self: start; }
+.time { font-size: clamp(72px, 11vw, 150px); line-height: 1; letter-spacing: .02em; }
+.date { margin-top: 10px; font-size: clamp(18px, 1.8vw, 24px); font-weight: 500; opacity: .92; }
+.message { margin-top: 18px; font-size: 17px; opacity: .9; max-width: 60ch; }
+.who { display: flex; flex-direction: column; align-items: center; gap: 12px; width: min(340px, 90vw); transition: transform .45s var(--spring), opacity .45s; }
+.avatar { width: 92px; height: 92px; border-radius: 50%; background: linear-gradient(135deg, var(--sakura), var(--lav)) center / cover; border: 3px solid rgba(255, 255, 255, .85);
+  box-shadow: 0 10px 30px rgba(0, 0, 0, .4); display: grid; place-items: center; font-size: 38px; font-weight: 700; color: var(--on-accent); text-shadow: none; }
+.name { font-size: 20px; font-weight: 600; }
+.pw { position: relative; width: 100%; }
+.pw input { width: 100%; height: 50px; padding: 0 56px 0 20px; border-radius: 16px; border: 1px solid rgba(255, 255, 255, .28); background: rgba(10, 12, 28, .55);
+  color: #fff; font-size: 16px; backdrop-filter: blur(16px); letter-spacing: .12em; }
+.pw input::placeholder { color: rgba(255, 255, 255, .7); letter-spacing: 0; }
+.pw input:focus { outline: none; border-color: var(--mint); box-shadow: 0 0 0 4px rgba(142, 240, 199, .22); }
+.pw .go { position: absolute; right: 6px; top: 6px; width: 38px; height: 38px; border-radius: 12px; border: 0; background: var(--mint); color: var(--on-accent); display: grid; place-items: center; }
+.pw .go svg { width: 20px; height: 20px; }
+.status { min-height: 22px; font-size: 14px; font-weight: 500; text-align: center; }
+.who.wrong .pw { animation: shake .4s; }
+.who.wrong .status { color: #ffd0d6; }
+.who.checking .pw input { opacity: .7; }
+.who.ok { transform: scale(.94); opacity: 0; }
+@keyframes shake { 20%, 60% { transform: translateX(-8px); } 40%, 80% { transform: translateX(8px); } }
+.lockbar { position: fixed; left: 0; right: 0; bottom: 0; display: flex; align-items: flex-end; justify-content: space-between; gap: 12px; padding: 18px 22px; color: #fff; }
+.lockbar .right { display: flex; gap: 8px; align-items: center; margin-left: auto; }
+.lockbar .icon-btn { background: rgba(10, 12, 28, .5); border-color: rgba(255, 255, 255, .2); color: #fff; backdrop-filter: blur(12px); }
+.battery { font-size: 13px; font-weight: 600; padding: 6px 12px; border-radius: 99px; background: rgba(10, 12, 28, .5); }
+.np { display: flex; align-items: center; gap: 12px; padding: 8px 14px 8px 8px; border-radius: 18px; background: rgba(10, 12, 28, .55); backdrop-filter: blur(14px);
+  border: 1px solid rgba(255, 255, 255, .14); max-width: min(420px, 60vw); }
+.np img, .np .art { width: 46px; height: 46px; border-radius: 10px; object-fit: cover; flex: none; background: linear-gradient(135deg, var(--sakura), var(--lav)); }
+.np .t { min-width: 0; }
+.np b, .np small { display: block; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.np small { opacity: .75; }
+.np .icon-btn { width: 34px; height: 34px; }
+/* resting: after a while without input only the clock stays */
+body.resting .who, body.resting .lockbar { opacity: 0; pointer-events: none; }
+body.resting .shade { opacity: .55; }
+.who, .lockbar { transition: opacity .6s var(--ease), transform .45s var(--spring); }

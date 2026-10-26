@@ -1,23 +1,27 @@
 [Desktop Entry]
 Type=Application
 Name=Aerie
-GenericName=Live Desktop
-Comment=A living 3D desktop, with an AI that helps you design it
+GenericName=Live Wallpapers
+Comment=Live wallpapers, a drop-down hub and a live lock screen for COSMIC
 Exec=aerie
 Icon=io.github.jayswansocool48.Aerie
 Terminal=false
 Categories=Utility;Settings;DesktopSettings;
-Keywords=wallpaper;live wallpaper;widgets;3D;desktop;theme;customize;AI;Deskscape;
+Keywords=wallpaper;live wallpaper;wallpaper engine;blender;3D;anime;lock screen;widgets;clipboard;desktop;theme;customize;Deskscape;
 StartupNotify=false
-Actions=Customize;Window;Quit;
+Actions=Hub;Studio;Wallpapers;Quit;
 
-[Desktop Action Customize]
-Name=Customize
-Exec=aerie --edit
+[Desktop Action Hub]
+Name=Open the Hub
+Exec=aerie --hub
 
-[Desktop Action Window]
-Name=Open in a Window
-Exec=aerie --window
+[Desktop Action Studio]
+Name=Aerie Studio
+Exec=aerie --studio
+
+[Desktop Action Wallpapers]
+Name=Change Wallpaper
+Exec=aerie --hub --tab=wallpaper
 
 [Desktop Action Quit]
 Name=Quit

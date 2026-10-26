@@ -1,0 +1,152 @@
+/* Aerie's interface: the hub, Aerie Studio and the lock screen.
+   Night-sky glass, soft sakura / mint / lavender accents, Outfit for text and Dela Gothic One
+   for big titles (both SIL Open Font License, bundled in web/fonts). Every color pair here
+   meets WCAG AA contrast on its background. */
+
+:root {
+  --bg0: #090b17;
+  --bg1: #0f1226;
+  --bg2: #161a33;
+  --glass: rgba(15, 18, 38, .86);
+  --raised: rgba(255, 255, 255, .045);
+  --raised-2: rgba(255, 255, 255, .08);
+  --line: rgba(255, 255, 255, .08);
+  --line-2: rgba(255, 255, 255, .15);
+  --text: #eef0fb;
+  --muted: #a6acd0;
+  --dim: #7d84ab;
+  --sakura: #ff8fb1;
+  --mint: #8ef0c7;
+  --lav: #b3a6ff;
+  --sun: #ffc58a;
+  --danger: #ff8091;
+  --on-accent: #0b0d1a;
+  --r-lg: 24px;
+  --r-md: 16px;
+  --r-sm: 11px;
+  --ease: cubic-bezier(.2, .8, .2, 1);
+  --spring: cubic-bezier(.34, 1.4, .5, 1);
+  --display: "Dela Gothic One", "Noto Sans CJK JP", Outfit, sans-serif;
+  --ui: Outfit, "Noto Sans", system-ui, sans-serif;
+  color-scheme: dark;
+}
+
+* { box-sizing: border-box; }
+html, body { margin: 0; }
+body.ui { font-family: var(--ui); color: var(--text); font-size: 14.5px; line-height: 1.45; -webkit-font-smoothing: antialiased; }
+button, input, select, textarea { font: inherit; color: inherit; }
+button { cursor: pointer; }
+:focus-visible { outline: 2px solid var(--mint); outline-offset: 2px; border-radius: 8px; }
+[hidden] { display: none !important; }
+.sr { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+
+/* scrollbars */
+.ui ::-webkit-scrollbar { width: 10px; height: 10px; }
+.ui ::-webkit-scrollbar-thumb { background: rgba(255, 255, 255, .12); border-radius: 10px; border: 3px solid transparent; background-clip: padding-box; }
+.ui ::-webkit-scrollbar-track { background: transparent; }
+
+/* ---- type ---- */
+.display { font-family: var(--display); font-weight: 400; letter-spacing: .01em; }
+.kana { font-family: "Noto Sans CJK JP", "Noto Sans JP", "Source Han Sans", var(--ui); font-weight: 500; font-size: 12px; color: var(--dim); letter-spacing: .18em; }
+.muted { color: var(--muted); }
+.small { font-size: 12.5px; }
+h1, h2, h3 { margin: 0; font-weight: 600; letter-spacing: -.01em; }
+
+/* ---- buttons ---- */
+.btn { display: inline-flex; align-items: center; justify-content: center; gap: 8px; min-height: 38px; padding: 8px 16px;
+  border-radius: 12px; border: 1px solid var(--line-2); background: var(--raised); color: var(--text); font-weight: 500;
+  transition: background .15s, border-color .15s, transform .15s var(--spring); white-space: nowrap; }
+.btn:hover { background: var(--raised-2); border-color: rgba(255, 255, 255, .22); }
+.btn:active { transform: scale(.97); }
+.btn svg { width: 18px; height: 18px; flex: none; }
+.btn.primary { border-color: transparent; color: var(--on-accent); font-weight: 600;
+  background: linear-gradient(135deg, var(--sakura), var(--lav)); box-shadow: 0 8px 24px rgba(255, 143, 177, .25); }
+.btn.primary:hover { filter: brightness(1.06); }
+.btn.mint { border-color: transparent; color: var(--on-accent); background: var(--mint); font-weight: 600; }
+.btn.ghost { border-color: transparent; background: transparent; color: var(--muted); }
+.btn.ghost:hover { color: var(--text); background: var(--raised); }
+.btn.danger { color: var(--danger); border-color: rgba(255, 128, 145, .35); }
+.btn.danger:hover { background: rgba(255, 128, 145, .12); }
+.btn.small { min-height: 30px; padding: 4px 11px; font-size: 13px; border-radius: 9px; }
+.btn[disabled] { opacity: .45; pointer-events: none; }
+.icon-btn { width: 38px; height: 38px; padding: 0; border-radius: 12px; display: inline-grid; place-items: center; border: 1px solid var(--line); background: var(--raised); }
+.icon-btn:hover { background: var(--raised-2); }
+.icon-btn svg { width: 18px; height: 18px; }
+
+/* ---- pill tabs (as in the hub) ---- */
+.pills { display: flex; gap: 4px; align-items: center; justify-content: center; flex-wrap: wrap; }
+.pill { border: 0; background: transparent; color: var(--muted); padding: 7px 15px; border-radius: 99px; font-weight: 500; font-size: 14px;
+  transition: background .2s, color .2s; }
+.pill:hover { color: var(--text); background: var(--raised); }
+.pill[aria-selected="true"] { color: var(--on-accent); background: var(--mint); font-weight: 600; }
+
+/* ---- chips (filters) ---- */
+.chips { display: flex; gap: 6px; flex-wrap: wrap; }
+.chip { border: 1px solid var(--line-2); background: transparent; color: var(--muted); padding: 5px 12px; border-radius: 99px; font-size: 13px; }
+.chip:hover { color: var(--text); }
+.chip[aria-pressed="true"] { background: rgba(142, 240, 199, .14); border-color: rgba(142, 240, 199, .5); color: var(--mint); }
+
+/* ---- control tiles (Wi-Fi, Bluetooth…) ---- */
+.tile { display: flex; align-items: center; gap: 12px; min-height: 64px; padding: 12px 14px; border-radius: var(--r-md);
+  border: 1px solid var(--line); background: var(--raised); text-align: left; transition: background .2s, transform .2s var(--spring); }
+.tile:hover { background: var(--raised-2); }
+.tile:active { transform: scale(.98); }
+.tile .ti { width: 36px; height: 36px; border-radius: 12px; display: grid; place-items: center; background: rgba(255, 255, 255, .07); flex: none; }
+.tile .ti svg { width: 19px; height: 19px; }
+.tile b { display: block; font-weight: 600; }
+.tile small { display: block; color: var(--muted); font-size: 12.5px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 22ch; }
+.tile[aria-pressed="true"] { background: var(--mint); border-color: transparent; color: var(--on-accent); }
+.tile[aria-pressed="true"] small { color: rgba(11, 13, 26, .72); }
+.tile[aria-pressed="true"] .ti { background: rgba(11, 13, 26, .12); }
+.tile[aria-disabled="true"] { opacity: .5; }
+
+/* ---- switch ---- */
+.switch { position: relative; width: 44px; height: 26px; flex: none; appearance: none; margin: 0; border-radius: 99px;
+  background: rgba(255, 255, 255, .14); cursor: pointer; transition: background .2s; }
+.switch::after { content: ""; position: absolute; top: 3px; left: 3px; width: 20px; height: 20px; border-radius: 50%; background: #fff;
+  transition: transform .25s var(--spring); box-shadow: 0 2px 6px rgba(0, 0, 0, .3); }
+.switch:checked { background: var(--mint); }
+.switch:checked::after { transform: translateX(18px); }
+
+/* ---- sliders ---- */
+input[type="range"].slider { appearance: none; width: 100%; height: 28px; background: transparent; margin: 0; }
+input[type="range"].slider::-webkit-slider-runnable-track { height: 8px; border-radius: 99px;
+  background: linear-gradient(90deg, var(--mint) 0 var(--fill, 50%), rgba(255, 255, 255, .12) var(--fill, 50%)); }
+input[type="range"].slider::-webkit-slider-thumb { appearance: none; width: 20px; height: 20px; margin-top: -6px; border-radius: 50%; background: #fff;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, .4); }
+.slider-row { display: flex; align-items: center; gap: 12px; padding: 10px 14px; border-radius: var(--r-md); background: var(--raised); border: 1px solid var(--line); }
+.slider-row svg { width: 18px; height: 18px; color: var(--muted); flex: none; }
+.slider-row output { min-width: 3.5ch; text-align: right; color: var(--muted); font-variant-numeric: tabular-nums; font-size: 13px; }
+
+/* ---- inputs ---- */
+.input, select.input, textarea.input { width: 100%; min-height: 40px; padding: 9px 13px; border-radius: 12px; border: 1px solid var(--line-2);
+  background: rgba(0, 0, 0, .25); color: var(--text); }
+.input::placeholder { color: var(--dim); }
+.input:focus { outline: none; border-color: var(--mint); box-shadow: 0 0 0 3px rgba(142, 240, 199, .18); }
+.search { position: relative; }
+.search svg { position: absolute; left: 12px; top: 50%; translate: 0 -50%; width: 17px; height: 17px; color: var(--dim); pointer-events: none; }
+.search .input { padding-left: 38px; }
+
+/* ---- cards ---- */
+.card { border-radius: var(--r-md); border: 1px solid var(--line); background: var(--raised); padding: 14px; }
+.card h3 { font-size: 14px; margin-bottom: 8px; }
+.empty { display: grid; place-items: center; text-align: center; gap: 10px; padding: 30px 20px; color: var(--muted); }
+.empty svg { width: 34px; height: 34px; color: var(--dim); }
+
+/* ---- rings (stats, timer) ---- */
+.ring { --p: 0; --c: var(--mint); position: relative; width: 112px; height: 112px; border-radius: 50%;
+  background: conic-gradient(var(--c) calc(var(--p) * 1%), rgba(255, 255, 255, .09) 0); display: grid; place-items: center; }
+.ring::before { content: ""; position: absolute; inset: 9px; border-radius: 50%; background: var(--bg1); }
+.ring > * { position: relative; text-align: center; }
+.ring b { font-size: 22px; font-weight: 700; font-variant-numeric: tabular-nums; }
+.ring small { display: block; color: var(--muted); font-size: 12px; }
+
+/* ---- toast ---- */
+.toast { position: fixed; left: 50%; bottom: 26px; translate: -50% 0; padding: 11px 18px; border-radius: 14px; background: rgba(15, 18, 38, .96);
+  border: 1px solid var(--line-2); box-shadow: 0 16px 40px rgba(0, 0, 0, .45); z-index: 50; max-width: min(560px, 90vw); text-align: center;
+  animation: toast-in .35s var(--spring); }
+@keyframes toast-in { from { opacity: 0; transform: translateY(12px) scale(.96); } }
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after { animation-duration: .01ms !important; transition-duration: .01ms !important; }
+}

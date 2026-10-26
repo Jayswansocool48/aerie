@@ -7,6 +7,14 @@ if "--restore-cosmic-look" in sys.argv:
     print("COSMIC look restored." if restore() else "Nothing to restore.")
     sys.exit(0)
 
+if "--undo-extras" in sys.argv:
+    # Used by ./install.sh --uninstall: remove the hub shortcuts and the lock screen choice.
+    from .server import _undo_extras
+
+    _undo_extras()
+    print("Hub shortcuts and lock screen choice removed.")
+    sys.exit(0)
+
 if "--windows" in sys.argv:
     # Shows what Aerie sees of your windows (for "it pauses when it shouldn't").
     import time

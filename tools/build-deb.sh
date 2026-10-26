@@ -41,11 +41,17 @@ mkdir -p "$LIB/lib/girepository-1.0" "$LIB/bin" "$PKG/usr/bin" "$PKG/DEBIAN" \
 
 cp -r "$SRC/aerie" "$SRC/web" "$LIB/"
 find "$LIB" -name __pycache__ -prune -exec rm -rf {} +
-install -m 755 "$SRC/bin/aerie" "$LIB/bin/aerie"
+install -m 755 "$SRC/bin/aerie" "$SRC/bin/aerie-lock" "$SRC/bin/aerie-system" "$SRC/bin/cosmic-greeter-wrapper" "$LIB/bin/"
 ln -s ../lib/aerie/bin/aerie "$PKG/usr/bin/aerie"
+ln -s ../lib/aerie/bin/aerie-lock "$PKG/usr/bin/aerie-lock"
+# the lock screen checks your password the way logging in does
+mkdir -p "$PKG/etc/pam.d" "$PKG/usr/share/polkit-1/actions"
+install -m 644 "$SRC/data/pam/aerie-lock" "$PKG/etc/pam.d/aerie-lock"
+install -m 644 "$SRC/data/$APP_ID.policy" "$PKG/usr/share/polkit-1/actions/"
 
 cp -P "$LS_PREFIX"/lib/libgtk4-layer-shell.so.* "$LIB/lib/"
 cp "$LS_PREFIX"/lib/girepository-1.0/Gtk4LayerShell-1.0.typelib "$LIB/lib/girepository-1.0/"
+cp "$LS_PREFIX"/lib/girepository-1.0/Gtk4SessionLock-1.0.typelib "$LIB/lib/girepository-1.0/"
 strip --strip-unneeded "$LIB"/lib/libgtk4-layer-shell.so.*.* 2>/dev/null || true
 
 install -m 644 "$SRC/data/$APP_ID.desktop" "$PKG/usr/share/applications/"
@@ -54,6 +60,7 @@ install -m 644 "$SRC/data/$APP_ID.svg" "$PKG/usr/share/icons/hicolor/scalable/ap
 install -m 644 "$SRC/LICENSE" "$SRC/PRIVACY.md" "$SRC/TERMS.md" "$PKG/usr/share/doc/aerie/"
 install -m 644 "$SRC/web/vendor/THREE-LICENSE" "$PKG/usr/share/doc/aerie/"
 install -m 644 "$SRC/tools/GTK4-LAYER-SHELL-LICENSE" "$PKG/usr/share/doc/aerie/"
+install -m 644 "$SRC/web/fonts/Outfit-OFL.txt" "$SRC/web/fonts/DelaGothicOne-OFL.txt" "$SRC/web/vendor/DRACO-LICENSE" "$PKG/usr/share/doc/aerie/"
 
 # COSMIC Store listing: the store reads app catalogs from /usr/share/swcatalog and matches
 # them to installed packages by <pkgname>, so Aerie shows up there once installed.
@@ -69,19 +76,29 @@ Section: x11
 Priority: optional
 Architecture: $ARCH
 Installed-Size: $SIZE
-Depends: python3 (>= 3.10), python3-gi, gir1.2-gtk-4.0, gir1.2-webkit-6.0, libgtk-4-1, libwayland-client0, libglib2.0-bin, policykit-1 | pkexec
+Depends: python3 (>= 3.10), python3-gi, gir1.2-gtk-4.0, gir1.2-webkit-6.0, libgtk-4-1, libwayland-client0, libglib2.0-bin, libpam0g, policykit-1 | pkexec
+Recommends: wl-clipboard, gstreamer1.0-libav, gstreamer1.0-plugins-good, gstreamer1.0-plugins-bad
 Conflicts: deskscape
 Replaces: deskscape
 Provides: deskscape
 Maintainer: Jayswansocool48 <Jayswansocool48@users.noreply.github.com>
 Homepage: https://github.com/Jayswansocool48/aerie
-Description: Living 3D desktop for Pop!_OS COSMIC, with an AI design helper
- Aerie turns the COSMIC desktop into a living 3D scene with widgets, an app
- launcher, sounds and a camera that follows your mouse. It can restyle the
- COSMIC panel, dock and lock screen, and an optional assistant (Claude,
- ChatGPT or a local Ollama model) helps you design it. Formerly Deskscape.
+Description: Live wallpapers for Pop!_OS COSMIC, like Wallpaper Engine
+ Aerie plays live wallpapers on the COSMIC desktop and lock screen: 3D scenes
+ made in Blender, videos, pictures, web pages and Wallpaper Engine wallpapers
+ (from the Steam Workshop or a folder). A hub drops down from the top of the
+ screen with quick controls, stats, clipboard history, apps and wallpapers, and
+ Aerie Studio holds your library and every setting. Formerly Deskscape.
 EOF
 
+# Before removal: put COSMIC's own lock screen back if Aerie's switch is on.
+cat > "$PKG/DEBIAN/prerm" <<'EOF'
+#!/bin/sh
+set -e
+if [ "$1" = "remove" ] || [ "$1" = "purge" ]; then
+  /usr/lib/aerie/bin/aerie-system lockscreen-off >/dev/null 2>&1 || true
+fi
+EOF
 # When the package is purged, also remove the update source it added.
 cat > "$PKG/DEBIAN/postrm" <<'EOF'
 #!/bin/sh
@@ -98,7 +115,8 @@ rm -f /etc/apt/sources.list.d/deskscape.sources /usr/share/keyrings/deskscape.gp
 command -v update-desktop-database >/dev/null && update-desktop-database -q /usr/share/applications || true
 command -v gtk-update-icon-cache >/dev/null && gtk-update-icon-cache -q -t /usr/share/icons/hicolor || true
 EOF
-chmod 755 "$PKG/DEBIAN/postrm" "$PKG/DEBIAN/postinst"
+printf '/etc/pam.d/aerie-lock\n' > "$PKG/DEBIAN/conffiles"
+chmod 755 "$PKG/DEBIAN/postrm" "$PKG/DEBIAN/postinst" "$PKG/DEBIAN/prerm"
 
 OUT="$SRC/dist/aerie_${VERSION}_${ARCH}.deb"
 dpkg-deb --root-owner-group --build "$PKG" "$OUT" >/dev/null

@@ -1,0 +1,28 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; img-src 'self' blob: data:; media-src 'self' blob:; style-src 'self' 'unsafe-inline'; font-src 'self'; script-src 'self'; connect-src 'self'">
+  <title>Aerie hub</title>
+  <link rel="stylesheet" href="css/fonts.css">
+  <link rel="stylesheet" href="css/ui.css">
+  <link rel="stylesheet" href="css/hub.css">
+</head>
+<body class="ui hub">
+  <div class="backdrop" id="backdrop"></div>
+  <section class="hub-panel" id="panel" role="dialog" aria-modal="true" aria-label="Aerie hub">
+    <header class="hub-head">
+      <div class="hub-brand"><img src="img/aerie.svg" alt=""><span class="kana" id="kana">操作</span></div>
+      <nav class="pills" id="tabs" role="tablist" aria-label="Hub sections"></nav>
+      <div class="hub-tools">
+        <button class="icon-btn" id="studio" type="button" title="Aerie Studio (customize everything)" aria-label="Open Aerie Studio"></button>
+        <button class="icon-btn" id="close" type="button" title="Close (Esc)" aria-label="Close the hub"></button>
+      </div>
+    </header>
+    <div class="hub-body" id="body" role="tabpanel"></div>
+  </section>
+  <div class="toast" id="toast" role="status" aria-live="polite" hidden></div>
+  <script type="module" src="js/hub.js"></script>
+</body>
+</html>

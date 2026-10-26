@@ -200,10 +200,10 @@ export class WidgetLayer {
           const img = document.createElement('img');
           img.src = st.url; img.alt = st.alt || ''; img.style.objectFit = st.fit;
           el.appendChild(img);
-        } else el.innerHTML = '<div class="empty">Pick an image in the editor</div>';
+        } else el.innerHTML = '<div class="empty">Pick an image in Aerie Studio → Widgets</div>';
         break;
       case 'slideshow': {
-        if (!st.images.length) { el.innerHTML = '<div class="empty">Add photos in the editor</div>'; break; }
+        if (!st.images.length) { el.innerHTML = '<div class="empty">Add photos in Aerie Studio → Widgets</div>'; break; }
         st.images.forEach((url, i) => {
           const img = document.createElement('img');
           img.src = url; img.alt = ''; img.style.objectFit = st.fit;
@@ -214,7 +214,7 @@ export class WidgetLayer {
       }
       case 'links': {
         el.classList.add('links');
-        if (!st.items.length) el.innerHTML = '<div class="empty">Add links in the editor</div>';
+        if (!st.items.length) el.innerHTML = '<div class="empty">Add links in Aerie Studio → Widgets</div>';
         for (const item of st.items) {
           const b = document.createElement('button');
           b.className = 'link';
@@ -229,7 +229,7 @@ export class WidgetLayer {
       case 'worldclock':
         el.classList.add('world');
         el.innerHTML = st.zones.map((z, i) => `<div class="zone" data-i="${i}"><span class="zone-name"></span><span class="zone-time"></span><span class="zone-day"></span></div>`).join('')
-          || '<div class="empty">Add places in the editor</div>';
+          || '<div class="empty">Add places in Aerie Studio → Widgets</div>';
         st.zones.forEach((z, i) => { el.querySelector(`[data-i="${i}"] .zone-name`).textContent = z.label; });
         break;
       case 'countdown':
@@ -328,7 +328,7 @@ export class WidgetLayer {
     const el = div('widget-body favorites');
     el.setAttribute('role', 'list');
     const picked = this.pinnedApps(w.settings.apps);
-    if (!picked.length) el.innerHTML = `<div class="empty">${this.editMode ? 'Choose apps in the editor' : 'Star apps in the launcher to pin them here'}</div>`;
+    if (!picked.length) el.innerHTML = `<div class="empty">${this.editMode ? 'Choose apps in Aerie Studio' : 'Star apps in the launcher to pin them here'}</div>`;
     else el.replaceChildren(...picked.map(a => this.appButton(a, { label: w.settings.labels })));
     return el;
   }

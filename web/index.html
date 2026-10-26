@@ -3,8 +3,9 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; img-src 'self' blob: data:; media-src 'self' blob:; style-src 'self' 'unsafe-inline'; script-src 'self'; connect-src 'self' blob: data:">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; img-src 'self' blob: data:; media-src 'self' blob:; style-src 'self' 'unsafe-inline'; font-src 'self'; script-src 'self' 'wasm-unsafe-eval'; worker-src 'self' blob:; connect-src 'self' blob: data:">
   <title>Aerie</title>
+  <link rel="stylesheet" href="css/fonts.css">
   <link rel="stylesheet" href="css/aerie.css">
 </head>
 <body>
@@ -13,21 +14,16 @@
     <video id="bg-video" muted loop playsinline hidden></video>
   </div>
   <canvas id="scene" aria-label="3D desktop scene"></canvas>
+  <div id="wall" aria-hidden="true" hidden></div>
   <div id="vignette" aria-hidden="true"></div>
   <div id="grain" aria-hidden="true"></div>
   <main id="widgets" aria-label="Desktop widgets"></main>
   <div id="drawer" hidden></div>
 
-  <button id="edit-button" type="button" title="Customize (Ctrl+E)" aria-label="Customize desktop">
-    <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 20h4L19 9l-4-4L4 16v4zM14 6l4 4" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
-  </button>
-
-  <aside id="editor" class="panel" aria-label="Customize" hidden></aside>
   <div id="toast" role="status" aria-live="polite" hidden></div>
-  <div id="lock-overlay" aria-hidden="true"><div class="lo-dim"></div><p class="lo-msg"></p></div>
   <div id="quickmenu" class="quickmenu"></div>
   <div id="arrange-bar" role="toolbar" aria-label="Moving widgets" hidden>
-    <span>Drag widgets to move them · drag the orange corner to resize · hold Shift to snap</span>
+    <span>Drag widgets to move them · drag the corner to resize · hold Shift to snap</span>
     <button type="button">Done</button>
   </div>
 

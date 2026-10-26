@@ -127,7 +127,25 @@ export function defaultScene() {
 }
 
 export function defaultConfig() {
-  return normalizeConfig({ ...PRESETS['Lavender Dusk'].build(), general: defaultGeneral() });
+  // a fresh start: the first Blender scene that comes with Aerie (or the Lavender Dusk 3D look
+  // if there are none), with a clock and the date
+  const look = PRESETS['Lavender Dusk'].build();
+  return normalizeConfig({
+    ...look, general: defaultGeneral(), wallpaper: { type: 'default' },
+    widgets: [defaultWidget('clock'), Object.assign(defaultWidget('date'), { y: 26 })].map(w => Object.assign(w, { card: false, x: 5 })),
+    theme: { ...look.theme, font: 'display', cardStyle: 'liquid', accent: '#ff8fb1', text: '#ffffff', widgetBg: '#1a1f44', widgetOpacity: 0.32 },
+  });
+}
+
+/** Which wallpaper a screen shows: its own choice, or the one for all screens. */
+export function wallpaperFor(cfg, monitor = MONITOR) {
+  return (cfg.screens && cfg.screens[String(monitor)]) || cfg.wallpaper || { type: 'default' };
+}
+
+/** Your settings for one wallpaper (its own options, fit, speed and sound). */
+export function wallpaperSettings(cfg, key) {
+  return deepMerge({ props: {}, fit: 'cover', speed: 1, sound: false, volume: 50, motion: 1, exposure: 1, background: '', shadows: true },
+    (cfg.wallpaperProps || {})[key] || {});
 }
 
 function defaultGeneral() {
@@ -143,20 +161,26 @@ function defaultGeneral() {
     matchTaskbar: 'ask',
     pauseWhen: 'maximized', // maximized · focused · never
     libraryConsent: false,
+    hub: { hotEdge: true, tabs: ['controls', 'today', 'stats', 'clipboard', 'apps', 'wallpaper', 'power'], lastTab: 'controls', showMature: false },
+    clipboard: { enabled: false },
+    lockScreen: { clock: true, date: true, media: true, battery: true, blur: 0, dim: 0.25, message: '', power: true },
   };
 }
 
 export function normalizeConfig(raw) {
   if (!raw || typeof raw !== 'object') return defaultConfig();
   const base = {
-    version: 3,
+    version: 4,
+    wallpaper: { type: 'scene' }, // a config from before wallpapers existed keeps its 3D scene
+    screens: {},
+    wallpaperProps: {},
     scene: defaultScene(),
     camera: { mode: 'parallax', strength: 1, smoothing: 0.06, fov: 50, distance: 9, drift: true },
     theme: defaultTheme(),
     general: defaultGeneral(),
   };
   const merged = deepMerge(base, raw);
-  merged.version = 3;
+  merged.version = 4;
   merged.objects = (raw.objects || []).map(o => deepMerge(defaultObject(o.shape), o));
   merged.widgets = (raw.widgets || []).map(w => {
     const d = defaultWidget(w.type);
@@ -213,7 +237,32 @@ export const api = {
   installInfo: () => call('POST', '/api/install-info').catch(() => ({ installed: false, canUpdate: false, version: '' })),
   update: () => call('POST', '/api/update'),
   restart: () => call('POST', '/api/restart'),
-  shell: action => call('POST', '/api/shell', { action, monitor: MONITOR }).catch(() => null),
+  shell: (action, extra) => call('POST', '/api/shell', { action, monitor: MONITOR, extra }).catch(() => null),
+  wallpapers: () => call('GET', '/api/wallpapers').then(d => d.items).catch(() => []),
+  steam: () => call('GET', '/api/wallpapers/steam').catch(() => ({ steam: false, count: 0 })),
+  scene: id => call('GET', '/api/wallpapers/scene?id=' + encodeURIComponent(id)),
+  importPath: path => call('POST', '/api/wallpapers/import', { path }),
+  pickWallpaper: folder => call('POST', '/api/wallpapers/pick', { folder }),
+  uploadWallpaper: file => call('POST', '/api/wallpapers/upload', file, { 'X-Filename': encodeURIComponent(file.name) }),
+  addUrl: (url, title) => call('POST', '/api/wallpapers/url', { url, title }),
+  removeWallpaper: id => call('POST', '/api/wallpapers/remove', { id }),
+  updateWallpaper: (id, changes) => call('POST', '/api/wallpapers/update', { id, ...changes }),
+  unhideWallpapers: () => call('POST', '/api/wallpapers/unhide'),
+  controls: () => call('GET', '/api/controls').catch(() => ({})),
+  setControl: (name, value) => call('POST', '/api/controls', { name, value }),
+  power: action => call('POST', '/api/power', { action }),
+  stats: () => call('GET', '/api/stats').catch(() => null),
+  speedtest: () => call('POST', '/api/speedtest'),
+  clipboard: (q = '', kind = 'all') => call('GET', `/api/clipboard?q=${encodeURIComponent(q)}&kind=${kind}`).catch(() => ({ items: [], available: false })),
+  clipAction: (action, id, extra = {}) => call('POST', '/api/clipboard', { action, id, ...extra }),
+  clipboardAccess: on => call('POST', '/api/system/clipboard-access', { on }),
+  lockStatus: () => call('GET', '/api/lock/status').catch(() => ({})),
+  lockInfo: () => call('GET', '/api/lock/info').catch(() => ({ name: '' })),
+  setLockEnabled: on => call('POST', '/api/lock/enable', { on }),
+  removeLockSwitch: () => call('POST', '/api/lock/remove-switch'),
+  previewLock: () => call('POST', '/api/lock/preview'),
+  hubShortcuts: () => call('GET', '/api/hub/shortcuts').catch(() => ({ installed: false })),
+  setHubShortcuts: on => call('POST', '/api/hub/shortcuts', { on }),
   library: kind => call('GET', '/api/library?kind=' + encodeURIComponent(kind)).then(d => d.items),
   libraryFetch: (kind, id, resolution) => call('POST', '/api/library/fetch', { kind, id, resolution }).then(d => d.url),
   lockscreen: () => call('GET', '/api/lockscreen').catch(() => ({ current: null })),

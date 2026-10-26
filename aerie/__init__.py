@@ -1,4 +1,4 @@
-"""Aerie: a customizable 3D desktop layer with widgets for Pop!_OS."""
+"""Aerie: live wallpapers, a drop-down hub and a live lock screen for Pop!_OS (COSMIC)."""
 
-__version__ = "1.1.0"
+__version__ = "2.0.0"
 APP_ID = "io.github.jayswansocool48.Aerie"

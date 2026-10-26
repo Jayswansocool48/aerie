@@ -1,0 +1,43 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; img-src 'self' blob: data:; style-src 'self' 'unsafe-inline'; font-src 'self'; script-src 'self'; frame-src 'self'; connect-src 'self'">
+  <title>Locked</title>
+  <link rel="stylesheet" href="css/fonts.css">
+  <link rel="stylesheet" href="css/ui.css">
+  <link rel="stylesheet" href="css/lock.css">
+</head>
+<body class="ui lock">
+  <iframe id="wall" title="" aria-hidden="true" tabindex="-1"></iframe>
+  <div class="shade" id="shade"></div>
+  <div class="preview-tag" id="preview-tag" hidden>Preview — nothing is locked. Press Esc to close.</div>
+  <main class="lockui" id="ui">
+    <section class="when">
+      <div class="time display" id="time"></div>
+      <div class="date" id="date"></div>
+      <div class="message" id="message" hidden></div>
+    </section>
+    <form class="who" id="form" autocomplete="off">
+      <div class="avatar" id="avatar" aria-hidden="true"></div>
+      <div class="name" id="name"></div>
+      <div class="pw">
+        <label class="sr" for="password">Password</label>
+        <input id="password" type="password" placeholder="Password" autocomplete="current-password" spellcheck="false" autofocus>
+        <button type="submit" class="go" id="go" aria-label="Unlock"></button>
+      </div>
+      <div class="status" id="status" role="alert" aria-live="assertive"></div>
+    </form>
+  </main>
+  <footer class="lockbar" id="bar">
+    <div class="np" id="np" hidden></div>
+    <div class="right">
+      <span class="battery" id="battery" hidden></span>
+      <button class="icon-btn" id="sleep" type="button" aria-label="Sleep" title="Sleep"></button>
+      <button class="icon-btn" id="power" type="button" aria-label="Shut down" title="Shut down"></button>
+    </div>
+  </footer>
+  <script type="module" src="js/lock.js"></script>
+</body>
+</html>

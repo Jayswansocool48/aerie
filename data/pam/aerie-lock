@@ -1,0 +1,4 @@
+#%PAM-1.0
+# Aerie lock screen: checks your password the same way logging in does.
+@include common-auth
+@include common-account

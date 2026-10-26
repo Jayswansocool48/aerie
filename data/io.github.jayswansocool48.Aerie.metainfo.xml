@@ -6,32 +6,30 @@
   <project_license>MIT</project_license>
 
   <name>Aerie</name>
-  <summary>A living 3D desktop, with an AI that helps you design it</summary>
+  <summary>Live wallpapers, a drop-down hub and a live lock screen</summary>
   <developer id="io.github.jayswansocool48">
     <name>Jayswansocool48</name>
   </developer>
 
   <description>
     <p>
-      Aerie turns your COSMIC desktop into a living 3D scene, like Wallpaper Engine: lavender fields
-      at sunset, a rolling ocean, snowy pine forests, a rainy city at night and lanterns drifting over
-      a lake, with widgets and an app launcher on top and a camera that follows your mouse. Your windows stay on top as usual.
+      Aerie brings live wallpapers to the COSMIC desktop, like Wallpaper Engine — on your desktop
+      and on your lock screen. Its default themes are 3D scenes made in Blender, played live with
+      their own camera, lights and animations, and moving with your mouse.
     </p>
     <ul>
-      <li>Eight hand-made looks, plus looks you save yourself</li>
-      <li>An optional design assistant: describe the mood you want and Claude, ChatGPT or a free local Ollama model designs it, with one-click undo</li>
-      <li>22 widgets you can drag right on the desktop, a magnifying dock and a full-screen app drawer</li>
-      <li>3D shapes, trees, rocks, city towers and your own models, 360° skies, flowers, forests, ocean waves and sand dunes, particles, fog and lighting</li>
-      <li>Restyles COSMIC's real panel and dock, glass windows and lock screen, with one-click restore</li>
-      <li>Interface sounds, ten soundscapes, and your own sound files</li>
+      <li>Wallpaper Engine wallpapers from the Steam Workshop show up by themselves (video, web, picture and scene wallpapers), or add a folder or zip</li>
+      <li>Your own Blender scenes (.glb), videos, pictures, web pages and web sites, and Lively web wallpapers</li>
+      <li>A hub that drops down from the top of the screen: quick controls, today, stats with a speed test, clipboard history, apps, a wallpaper cover flow and power</li>
+      <li>A live lock screen with your wallpaper, a big clock and what's playing (optional)</li>
+      <li>Aerie Studio: your library, drag-and-drop importing, wallpaper settings, widgets, a 3D look you design yourself, and an optional design assistant (Claude, ChatGPT or a free local Ollama model)</li>
+      <li>Restyles COSMIC's real panel and dock, with one-click restore</li>
       <li>Pauses while the app you're using is maximized or full screen, so games get full speed</li>
-      <li>Right-click the desktop for quick actions</li>
-      <li>No accounts, ads or tracking. Only goes online for the features you turn on</li>
+      <li>No accounts, ads or tracking. Only goes online for the features you use</li>
     </ul>
     <p>
-      Aerie is made for the COSMIC desktop on Pop!_OS and works on other Wayland desktops that
-      support layer-shell. On other desktops it opens in a normal window. Aerie was previously
-      called Deskscape; your setup carries over.
+      Made for the COSMIC desktop on Pop!_OS; works on other Wayland desktops that support
+      layer-shell. Aerie is not affiliated with Wallpaper Engine. Previously called Deskscape.
     </p>
   </description>
 
@@ -49,24 +47,20 @@
 
   <screenshots>
     <screenshot type="default">
-      <caption>The Lavender Dusk look</caption>
+      <caption>Your desktop with a live wallpaper and widgets</caption>
       <image>https://raw.githubusercontent.com/Jayswansocool48/aerie/main/docs/screenshots/desktop.png</image>
     </screenshot>
     <screenshot>
-      <caption>The design assistant</caption>
-      <image>https://raw.githubusercontent.com/Jayswansocool48/aerie/main/docs/screenshots/assistant.png</image>
+      <caption>The hub drops down from the top of the screen</caption>
+      <image>https://raw.githubusercontent.com/Jayswansocool48/aerie/main/docs/screenshots/hub.png</image>
     </screenshot>
     <screenshot>
-      <caption>Choosing a look</caption>
-      <image>https://raw.githubusercontent.com/Jayswansocool48/aerie/main/docs/screenshots/looks.png</image>
+      <caption>Aerie Studio: your wallpaper library</caption>
+      <image>https://raw.githubusercontent.com/Jayswansocool48/aerie/main/docs/screenshots/studio.png</image>
     </screenshot>
     <screenshot>
-      <caption>The Midnight City look</caption>
-      <image>https://raw.githubusercontent.com/Jayswansocool48/aerie/main/docs/screenshots/city.png</image>
-    </screenshot>
-    <screenshot>
-      <caption>Restyling COSMIC's real panel and dock</caption>
-      <image>https://raw.githubusercontent.com/Jayswansocool48/aerie/main/docs/screenshots/cosmic.png</image>
+      <caption>The live lock screen</caption>
+      <image>https://raw.githubusercontent.com/Jayswansocool48/aerie/main/docs/screenshots/lock.png</image>
     </screenshot>
   </screenshots>
 
@@ -88,6 +82,10 @@
     <keyword>customize</keyword>
     <keyword>taskbar</keyword>
     <keyword>AI</keyword>
+    <keyword>Wallpaper Engine</keyword>
+    <keyword>Blender</keyword>
+    <keyword>lock screen</keyword>
+    <keyword>clipboard</keyword>
     <keyword>Deskscape</keyword>
   </keywords>
 
@@ -102,6 +100,19 @@
   <content_rating type="oars-1.1" />
 
   <releases>
+    <release version="2.0.0" date="2026-10-26">
+      <description>
+        <p>A full redesign: Aerie is now a live wallpaper app, like Wallpaper Engine.</p>
+        <ul>
+          <li>Blender 3D scenes (.glb) as live wallpapers, and as Aerie's default themes</li>
+          <li>Wallpaper Engine wallpapers from the Steam Workshop, folders or zip files; Lively web wallpapers; your own videos, pictures, web pages and web sites</li>
+          <li>A new hub that drops down from the top of the screen (Super+D): controls, today, stats, clipboard history, apps, wallpapers and power</li>
+          <li>Aerie Studio: a separate window for your library and every setting, with a live preview</li>
+          <li>An optional live lock screen</li>
+          <li>A new look throughout</li>
+        </ul>
+      </description>
+    </release>
     <release version="1.1.0" date="2026-10-13">
       <description>
         <p>Eight all-new looks and more to build with.</p>

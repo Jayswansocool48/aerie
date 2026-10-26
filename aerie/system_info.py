@@ -35,6 +35,9 @@ class SystemInfo:
             "disk": _disk(),
             "battery": _battery(),
             "uptime": _uptime(),
+            "gpu": _gpu(),
+            "temperature": _cpu_temp(),
+            "cpuName": _cpu_name(),
             "hostname": socket.gethostname(),
             "user": os.environ.get("USER", ""),
             "time": time.time(),
@@ -108,3 +111,98 @@ def _uptime():
             return int(float(f.read().split()[0]))
     except (OSError, ValueError):
         return 0
+
+
+def _cpu_name():
+    try:
+        for line in Path("/proc/cpuinfo").read_text().splitlines():
+            if line.startswith("model name"):
+                return " ".join(line.split(":", 1)[1].replace("(R)", "").replace("(TM)", "").split())[:60]
+    except OSError:
+        pass
+    return ""
+
+
+def _gpu():
+    """How busy the graphics card is (AMD and Intel Arc report it; NVIDIA through nvidia-smi)."""
+    for card in sorted(Path("/sys/class/drm").glob("card[0-9]")):
+        busy = card / "device" / "gpu_busy_percent"
+        try:
+            percent = int(busy.read_text().strip())
+        except (OSError, ValueError):
+            continue
+        used = total = None
+        try:
+            used = int((card / "device" / "mem_info_vram_used").read_text())
+            total = int((card / "device" / "mem_info_vram_total").read_text())
+        except (OSError, ValueError):
+            pass
+        return {"percent": percent, "memUsed": used, "memTotal": total}
+    if shutil.which("nvidia-smi"):
+        import subprocess
+        try:
+            out = subprocess.run(["nvidia-smi", "--query-gpu=utilization.gpu,memory.used,memory.total",
+                                  "--format=csv,noheader,nounits"], capture_output=True, text=True, timeout=2).stdout
+            p, used, total = (int(x) for x in out.splitlines()[0].split(","))
+            return {"percent": p, "memUsed": used * 1048576, "memTotal": total * 1048576}
+        except (OSError, ValueError, IndexError, subprocess.SubprocessError):
+            pass
+    return None
+
+
+def _cpu_temp():
+    """The processor temperature in °C, if the computer reports it."""
+    best = None
+    for hw in Path("/sys/class/hwmon").glob("hwmon*"):
+        try:
+            name = (hw / "name").read_text().strip()
+        except OSError:
+            continue
+        if name not in ("k10temp", "coretemp", "zenpower", "cpu_thermal", "acpitz"):
+            continue
+        for t in sorted(hw.glob("temp*_input")):
+            try:
+                value = int(t.read_text()) / 1000
+            except (OSError, ValueError):
+                continue
+            if 0 < value < 130:
+                best = round(value)
+                break
+        if best is not None and name != "acpitz":
+            break
+    return best
+
+
+def top_apps(limit=6):
+    """The programs using the most memory, grouped by name."""
+    totals = {}
+    for proc in Path("/proc").iterdir():
+        if not proc.name.isdigit():
+            continue
+        try:
+            status = (proc / "status").read_text()
+        except OSError:
+            continue
+        name = rss = None
+        for line in status.splitlines():
+            if line.startswith("Name:"):
+                name = line.split(":", 1)[1].strip()
+            elif line.startswith("VmRSS:"):
+                rss = int(line.split()[1]) * 1024
+                break
+        if name and rss:
+            key = _APP_NAMES.get(name, name)
+            totals[key] = totals.get(key, 0) + rss
+    ranked = sorted(totals.items(), key=lambda kv: kv[1], reverse=True)[:limit]
+    return [{"name": n, "memory": m} for n, m in ranked]
+
+
+# Process names that don't look like the app's name
+_APP_NAMES = {
+    "firefox-bin": "Firefox", "firefox": "Firefox", "Isolated Web Co": "Firefox", "Web Content": "Firefox",
+    "chrome": "Google Chrome", "chromium": "Chromium", "brave": "Brave", "code": "Visual Studio Code",
+    "steam": "Steam", "steamwebhelper": "Steam", "Discord": "Discord", "spotify": "Spotify",
+    "cosmic-comp": "COSMIC desktop", "cosmic-panel": "COSMIC panel", "cosmic-files": "Files",
+    "cosmic-term": "Terminal", "cosmic-edit": "Text Editor", "WebKitWebProces": "Aerie (web)",
+    "python3": "Python", "godot": "Godot", "blender": "Blender", "obs": "OBS Studio",
+}

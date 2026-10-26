@@ -6,7 +6,7 @@ import {
 import { PRESETS } from './presets.js';
 import { CUSTOM_SOUNDS, SOUND_PACKS, SOUNDSCAPES } from './sound.js';
 import { appletName, layoutPreview, presetTaskbar, TASKBAR_LAYOUTS } from './taskbar.js';
-import { applyChanges, buildContext, cosmicChanges, describeCosmic, SUGGESTIONS } from './assistant.js';
+import { applyChanges, buildContext, cosmicChanges, describeCosmic, setWallpaperChoices, SUGGESTIONS } from './assistant.js';
 
 // The five places in the editor, each with a small icon (drawn as SVG paths).
 const TABS = [
@@ -26,8 +26,9 @@ const TAB_HINTS = {
 const TIMEZONES = (() => { try { return Intl.supportedValuesOf('timeZone'); } catch { return []; } })();
 
 export class Editor {
-  constructor(panel, callbacks) {
+  constructor(panel, callbacks, opts = {}) {
     this.panel = panel;
+    this.embedded = !!opts.embedded; // inside Aerie Studio: no header or tabs, Studio has its own
     this.cb = callbacks; // onChange(), onClose(), onSelectObject(id), onSelectWidget(id), getApps(), refreshApps(), toast(msg)
     this.tab = 'looks';
     this.selectedObject = null;
@@ -74,6 +75,7 @@ export class Editor {
 
   // ---- layout ---------------------------------------------------------
   render() {
+    if (this.embedded) return this.renderEmbedded();
     if (!this.open) return;
     const scrollTop = this.renderedTab === this.tab ? this.panel.querySelector('.panel-body')?.scrollTop || 0 : 0;
     this.renderedTab = this.tab;
@@ -126,9 +128,38 @@ export class Editor {
     body.scrollTop = scrollTop;
   }
 
+  /** Inside Studio: one page's sections, straight into the page. */
+  renderEmbedded() {
+    this.open = true;
+    const scroller = this.panel.closest('.st-main') || this.panel;
+    const scrollTop = this.renderedTab === this.tab ? scroller.scrollTop : 0;
+    this.renderedTab = this.tab;
+    this.panel.replaceChildren();
+    CURRENT_TAB = this.tab;
+    const body = this.panel;
+    if (this.library) this.libraryView(body);
+    else ({
+      look: () => { this.looksTab(body); this.styleParts(body, [0, 1]); this.objectsTab(body); this.sceneTab(body); },
+      widgets: () => { this.widgetsTab(body); this.styleParts(body, [2]); },
+      assistant: () => this.assistantTab(body),
+      desktop: () => this.cosmicTab(body),
+      settings: () => this.settingsTab(body),
+      cosmiclock: () => { if (this.cosmic) this.lockscreenSection(body); else api.cosmicLook().then(l => { this.cosmic = l; if (this.tab === 'cosmiclock') this.render(); }); },
+    })[this.tab]?.();
+    scroller.scrollTop = scrollTop;
+  }
+
+  /** Some of the style sections: 0 background, 1 finishing touches, 2 widget style. */
+  styleParts(body, which) {
+    const tmp = el('div');
+    this.styleTab(tmp);
+    const parts = [...tmp.children];
+    for (const i of which) if (parts[i]) body.appendChild(parts[i]);
+  }
+
   // ---- Look ---------------------------------------------------------------
   looksTab(body) {
-    if (!this.cfg.general.welcomed) {
+    if (!this.cfg.general.welcomed && !this.embedded) {
       const hi = section(body, 'Getting started');
       hi.append(
         el('p', 'note', 'Pick a look below to start. After that you rarely need this panel: right-click the desktop for quick actions (add widgets, change the look, pause, lock screen), and hold Alt to drag any widget around. Ctrl+E brings this panel back.'),
@@ -296,7 +327,7 @@ export class Editor {
     if (!look) return;
     if (!confirm(`Switch to your look "${look.name}"? This replaces the current scene, 3D objects and widgets.`)) return;
     const swap = () => {
-      Object.assign(this.cfg, normalizeConfig({ ...clone(look.data), general: this.cfg.general }), { presetName: look.name });
+      Object.assign(this.cfg, normalizeConfig({ ...clone(look.data), general: this.cfg.general, wallpaper: { type: 'scene' }, screens: {}, wallpaperProps: this.cfg.wallpaperProps }), { presetName: look.name });
       this.selectedObject = this.selectedWidget = null;
       this.commit(true);
     };
@@ -332,7 +363,7 @@ export class Editor {
     const p = PRESETS[name];
     if (!confirm(`Switch to "${name}"? This replaces your current scene, 3D objects and widgets.`)) return;
     const swap = () => {
-      Object.assign(this.cfg, presetConfig(name, this.cfg.general), { presetName: name });
+      Object.assign(this.cfg, presetConfig(name, this.cfg.general), { presetName: name, wallpaper: { type: 'scene' }, screens: {}, wallpaperProps: this.cfg.wallpaperProps || {} });
       this.selectedObject = this.selectedWidget = null;
       this.commit(true);
     };
@@ -721,7 +752,7 @@ export class Editor {
       pin.appendChild(this.pinnedEditor(look, send));
     }
 
-    this.lockscreenSection(body);
+    if (!this.embedded) this.lockscreenSection(body);
 
     const glass = section(body, 'Glass');
     glass.append(
@@ -906,6 +937,7 @@ export class Editor {
     this.render();
     const history = ai.chat.filter(m => m.role === 'user' || m.role === 'assistant').map(m => ({ role: m.role, content: m.content }));
     try {
+      setWallpaperChoices(await api.wallpapers());
       const res = await api.assistantChat(history, buildContext(this.cfg));
       const { scene, camera, objects, widgets, theme, presetName } = this.cfg;
       const snapshot = clone({ scene, camera, objects, widgets, theme, presetName });

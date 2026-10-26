@@ -493,6 +493,11 @@ def _clamp(v, lo, hi):
 BACKGROUND = "com.system76.CosmicBackground/v1"
 
 
+def clock_24h():
+    """Whether COSMIC's clock shows 24-hour time."""
+    return bool(_value(_raw(f"{CLOCK}/military_time"), False))
+
+
 def wallpaper():
     m = re.search(r'source:\s*Path\("((?:[^"\\]|\\.)*)"\)', _raw(f"{BACKGROUND}/all") or "")
     return json.loads(f'"{m.group(1)}"') if m else None

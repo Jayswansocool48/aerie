@@ -1,28 +1,33 @@
-// Wires the scene, widgets, app drawer and editor together and keeps your setup saved.
-import { api, defaultWidget, MONITOR, normalizeConfig, STANDALONE, WIDGET_GROUPS, WIDGET_TYPES } from './config.js';
-import { PRESETS } from './presets.js';
+// The desktop: your wallpaper with widgets on top. Customizing happens in Aerie Studio and the
+// hub, not here. The same page also draws the preview inside Studio (?mode=preview) and the
+// wallpaper behind the lock screen (?mode=lock, no widgets).
+import { api, defaultWidget, MONITOR, normalizeConfig, STANDALONE, wallpaperFor, wallpaperSettings, WIDGET_TYPES } from './config.js';
 import { QuickMenu } from './quickmenu.js';
 import { AppDrawer } from './drawer.js';
-import { Editor } from './editor.js';
 import { SceneView } from './scene.js';
 import { SoundEngine } from './sound.js';
 import { WidgetLayer } from './widgets.js';
+import { itemFor, libraryItems, settingsKey, WallpaperLayer } from './wallpaper.js';
 
+const MODE = new URLSearchParams(location.search).get('mode') || 'desktop'; // desktop · preview · lock
 const $ = sel => document.querySelector(sel);
 let cfg;
 let saveTimer;
+let kind = 'scene';
 const sound = new SoundEngine();
+document.documentElement.dataset.mode = MODE;
 
 const scene = new SceneView($('#scene'), {
-  onSelect: id => { editor.selectObject(id); scene.select(id); widgets.select(null); },
+  onSelect: id => { scene.select(id); widgets.select(null); toStudio({ type: 'select-object', id }); },
   onObjectMoved: (id, patch) => {
     const o = cfg.objects.find(x => x.id === id);
     if (!o) return;
     Object.assign(o, patch);
-    changed();
-    editor.render();
+    if (MODE === 'preview') toStudio({ type: 'object-moved', id, patch });
+    else changed();
   },
   onAction: click => {
+    if (MODE !== 'desktop') return;
     if (click.type === 'app' && click.value) launch(click.value);
     if (click.type === 'url' && /^https?:\/\//i.test(click.value)) window.open(click.value, '_blank', 'noopener');
     if (click.type === 'drawer') drawer.show();
@@ -30,15 +35,17 @@ const scene = new SceneView($('#scene'), {
   onPanoramaError: () => toast('Could not load that 360° picture'),
 });
 
+const wall = new WallpaperLayer($('#wall'));
+
 const widgets = new WidgetLayer($('#widgets'), {
-  onSelect: id => { editor.selectWidget(id); widgets.select(id); scene.select(null); },
+  onSelect: id => { widgets.select(id); scene.select(null); toStudio({ type: 'select-widget', id }); },
   onChange: (id, patch, opts = {}) => {
     const w = cfg.widgets.find(x => x.id === id);
     if (!w) return;
     Object.assign(w, patch);
     if (!opts.silent) widgets.apply(cfg);
-    scheduleSave();
-    if (!opts.silent) editor.render();
+    if (MODE === 'preview') toStudio({ type: 'widget-changed', id, patch });
+    else scheduleSave();
   },
   onLaunchError: msg => { sound.play('error'); toast(msg); },
   onLaunched: id => { sound.play('launch'); rememberLaunch(id); },
@@ -50,46 +57,41 @@ const widgets = new WidgetLayer($('#widgets'), {
 const drawer = new AppDrawer($('#drawer'), {
   getApps: () => widgets.loadApps(),
   launch: id => launch(id),
-  onOpen: () => { sound.play('open'); if (!editor.open) api.shell('front'); updatePause(); },
-  onClose: () => { sound.play('close'); if (!editor.open) api.shell('back'); updatePause(); },
+  onOpen: () => { sound.play('open'); api.shell('front'); updatePause(); },
+  onClose: () => { sound.play('close'); api.shell('back'); updatePause(); },
 });
 
-const editor = new Editor($('#editor'), {
-  onChange: () => changed(),
-  onClose: () => closeEditor(),
-  onSelectObject: id => scene.select(id),
-  onSelectWidget: id => widgets.select(id),
-  getApps: () => widgets.apps,
-  loadApps: () => widgets.loadApps(),
-  refreshApps: () => widgets.loadApps(true),
-  toast,
-  sound: event => sound.play(event),
-  pauseStatus: () => pauseStatusText(),
-  lockscreenFromScene: () => setLockscreenFromDesktop(),
-  previewSound: url => sound.previewFile(url).catch(() => toast('Could not play that file')),
-  saveNow: () => (STANDALONE ? Promise.resolve() : api.saveConfig(cfg).catch(() => null)),
-  transition: fn => new Promise(resolve => {
-    document.body.classList.add('switching');
-    setTimeout(() => { fn(); requestAnimationFrame(() => { document.body.classList.remove('switching'); resolve(); }); }, 280);
-  }),
-});
+function toStudio(msg) { if (MODE === 'preview' && window.parent !== window) window.parent.postMessage({ aerie: true, ...msg }, location.origin); }
 
 function changed() {
   applyAll();
   scheduleSave();
 }
 
-function applyAll() {
+async function applyAll() {
   applyTheme(cfg);
-  applyBackground(cfg.scene);
-  scene.apply(cfg);
-  widgets.apply(cfg);
-  if (editor.cfg !== cfg) editor.setConfig(cfg); // same setup: the editor already shows it (re-drawing it would steal focus while you type)
-  sound.configure(cfg.general.sound, cfg.scene.sound, MONITOR === 0, cfg.scene.soundFile);
+  const choice = wallpaperFor(cfg, MONITOR);
+  const items = choice.type === 'scene' ? [] : await libraryItems();
+  const item = itemFor(choice, items);
+  const settings = wallpaperSettings(cfg, settingsKey(choice, item));
+  settings.fps = cfg.general.fps;
+  kind = await wall.show(choice, settings);
+  const is3d = kind === 'scene';
+  document.body.dataset.wallpaper = kind;
+  // the 3D look only runs while it's the wallpaper
+  $('#bg').hidden = !is3d;
+  $('#scene').hidden = !is3d;
+  if (is3d) { applyBackground(cfg.scene); scene.apply(cfg); }
+  scene.setPaused(!is3d || paused);
+  const o = is3d ? cfg.scene.overlay || {} : {};
+  $('#vignette').style.opacity = o.vignette ?? 0;
+  $('#grain').style.opacity = o.grain ?? 0;
+  if (MODE !== 'lock') widgets.apply(cfg);
+  if (MODE === 'desktop') sound.configure(cfg.general.sound, is3d ? cfg.scene.sound : 'none', MONITOR === 0, cfg.scene.soundFile);
 }
 
 function scheduleSave() {
-  if (STANDALONE) return;
+  if (STANDALONE || MODE !== 'desktop') return;
   clearTimeout(saveTimer);
   saveTimer = setTimeout(async () => {
     try {
@@ -122,18 +124,18 @@ function togglePin(id) {
 
 // ---- look -----------------------------------------------------------------
 const FONT_STACKS = {
-  sans: '"Fira Sans", "Inter", "Noto Sans", system-ui, sans-serif',
+  sans: 'Outfit, "Fira Sans", "Noto Sans", system-ui, sans-serif',
   serif: '"Noto Serif", "DejaVu Serif", Georgia, serif',
   mono: '"Fira Mono", "JetBrains Mono", "Noto Sans Mono", monospace',
-  rounded: '"Nunito", "Comfortaa", "Fira Sans", system-ui, sans-serif',
-  display: '"Orbitron", "Audiowide", "Fira Sans", system-ui, sans-serif',
-  thin: '"Fira Sans", "Inter", "Noto Sans", system-ui, sans-serif',
+  rounded: '"Nunito", "Comfortaa", Outfit, system-ui, sans-serif',
+  display: '"Dela Gothic One", Outfit, system-ui, sans-serif',
+  thin: 'Outfit, "Fira Sans", "Noto Sans", system-ui, sans-serif',
 };
 
 function applyTheme(c) {
   const t = c.theme, root = document.documentElement, r = root.style;
   r.setProperty('--font', FONT_STACKS[t.font] || FONT_STACKS.sans);
-  r.setProperty('--font-weight', t.font === 'thin' ? '200' : '300');
+  r.setProperty('--font-weight', t.font === 'thin' ? '200' : t.font === 'display' ? '400' : '300');
   r.setProperty('--accent', t.accent);
   r.setProperty('--text', t.text);
   r.setProperty('--card', hexToRgba(t.widgetBg, t.widgetOpacity));
@@ -170,9 +172,6 @@ function applyBackground(s) {
     video.hidden = true;
     video.pause();
   }
-  const o = s.overlay || {};
-  $('#vignette').style.opacity = o.vignette ?? 0;
-  $('#grain').style.opacity = o.grain ?? 0;
 }
 
 function hexToRgba(hex, a) {
@@ -195,49 +194,13 @@ function hexToRgba(hex, a) {
   $('#grain').style.backgroundImage = `url(${c.toDataURL()})`;
 })();
 
-// ---- editor open/close -------------------------------------------------------
-function openEditor() {
-  if (editor.open) return;
-  drawer.hide();
-  api.shell('front');
-  scene.setEditMode(true);
-  widgets.setEditMode(true);
-  widgets.apply(cfg);
-  editor.show();
-  sound.play('open');
-  updatePause();
-  $('#edit-button').hidden = true;
-  if (cfg.general.editorHint) { cfg.general.editorHint = false; scheduleSave(); }
-}
-
-function closeEditor() {
-  if (!editor.open) return;
-  editor.hide();
-  scene.setEditMode(false);
-  widgets.setEditMode(false);
-  widgets.apply(cfg);
-  $('#edit-button').hidden = false;
-  sound.play('close');
-  api.shell('back');
-  updatePause();
-  if (!cfg.general.welcomed && MONITOR === 0) {
-    cfg.general.welcomed = true;
-    scheduleSave();
-    setTimeout(() => toast('Tip: right-click the desktop for quick actions, and hold Alt to drag any widget'), 900);
-  }
-}
-
-// Clicking the wallpaper gives it focus: you're on the desktop now, not in an app.
-window.addEventListener('focus', () => {
-  if (pauseWanted && !pauseOverridden && !manualPause) { pauseOverridden = true; updatePause(); }
-});
-
 // ---- moving widgets right on the desktop -------------------------------------------
 let arranging = false;
 function startArranging() {
-  if (editor.open || arranging) return;
+  if (arranging) return;
   arranging = true;
   drawer.hide();
+  api.shell('front');
   widgets.setEditMode(true);
   widgets.apply(cfg);
   document.body.classList.add('arranging');
@@ -253,67 +216,71 @@ function stopArranging() {
   widgets.apply(cfg);
   document.body.classList.remove('arranging');
   $('#arrange-bar').hidden = true;
+  api.shell('back');
   updatePause();
   sound.play('close');
 }
 $('#arrange-bar button').addEventListener('click', stopArranging);
 
-function pauseStatusText() {
-  if (manualPause) return 'Paused by you (right-click the desktop to resume).';
-  if (pauseWanted && !pauseOverridden) return `Paused right now: ${pauseReason || 'a window covers this screen'}.`;
-  if (pauseWanted && pauseOverridden) return 'Running (it looked covered, but your mouse is on the wallpaper, so it kept going).';
-  return 'Running right now.';
-}
-
 // ---- right-click the desktop: quick actions ------------------------------------------
 const menu = new QuickMenu($('#quickmenu'));
 const QUICK_WIDGETS = ['clock', 'date', 'notes', 'todo', 'nowplaying', 'system', 'calendar', 'timer', 'dock', 'search', 'quote', 'moon'];
 
-window.addEventListener('contextmenu', e => {
-  if (editor.open || e.target.closest('#editor, #drawer, #quickmenu, input, textarea')) return;
+window.addEventListener('contextmenu', async e => {
+  if (MODE !== 'desktop' || e.target.closest('#drawer, #quickmenu, input, textarea')) return;
   e.preventDefault();
   const node = e.target.closest('.widget');
   const w = node && cfg.widgets.find(x => x.id === node.dataset.id);
-  const objectId = !w && scene.hoverId;
-  const o = objectId && cfg.objects.find(x => x.id === objectId);
   const at = { x: Math.round((e.clientX / innerWidth) * 1000) / 10, y: Math.round((e.clientY / innerHeight) * 1000) / 10 };
   const items = [];
   if (w) {
     items.push(
-      { label: 'Widget settings…', run: () => { openEditor(); editor.selectWidget(w.id); widgets.select(w.id); } },
-      { label: 'Hide this widget', run: () => { w.visible = false; changed(); toast('Hidden — show it again in Customize → Widgets'); } },
+      { label: 'Widget settings…', run: () => api.shell('studio', 'widgets') },
+      { label: 'Hide this widget', run: () => { w.visible = false; changed(); toast('Hidden — show it again in Aerie Studio → Widgets'); } },
       { label: 'Remove this widget', danger: true, run: () => removeWidget(w) },
       '-',
     );
-  } else if (o) {
-    items.push(
-      { label: `${o.name || 'Object'} settings…`, run: () => { openEditor(); editor.selectObject(o.id); scene.select(o.id); } },
-      { label: 'Remove this object', danger: true, run: () => { cfg.objects = cfg.objects.filter(x => x !== o); changed(); toast('Object removed'); } },
-      '-',
-    );
   }
+  const library = await libraryItems();
+  const scenes = library.filter(i => i.source === 'default' || i.type === 'model').slice(0, 10);
+  const recent = library.filter(i => i.source !== 'default' && i.type !== 'model').slice(0, 8);
   items.push(
-    { label: 'Customize…', hint: 'Ctrl+E', run: openEditor },
-    { label: 'All apps', hint: 'Ctrl+Space', run: () => drawer.show() },
-    { label: 'Move widgets', hint: 'Alt+drag', run: startArranging },
-    { label: 'Add a widget', items: QUICK_WIDGETS.map(type => ({ label: WIDGET_TYPES[type], run: () => addWidgetAt(type, at) })) },
+    { label: 'Open the hub', hint: 'Super+D', run: () => api.shell('hub') },
+    { label: 'Aerie Studio…', hint: 'Ctrl+E', run: () => api.shell('studio') },
+    '-',
     {
-      label: 'Change the look', items: [
-        { label: 'Surprise me', run: () => surprise() },
-        ...(cfg.general.myLooks || []).map(look => ({ label: '★ ' + look.name, run: () => editor.applyMyLook(look.id) })),
-        ...Object.keys(PRESETS).map(name => ({ label: name, run: () => editor.applyPreset(name) })),
+      label: 'Wallpaper', items: [
+        ...scenes.map(i => ({ label: i.title, run: () => setWallpaper({ type: 'library', id: i.id }) })),
+        ...(scenes.length ? ['-'] : []),
+        ...recent.map(i => ({ label: i.title, run: () => setWallpaper({ type: 'library', id: i.id }) })),
+        ...(recent.length ? ['-'] : []),
+        { label: 'My 3D look', run: () => setWallpaper({ type: 'scene' }) },
+        { label: 'More wallpapers…', run: () => api.shell('hub', 'wallpaper') },
       ],
     },
+    { label: 'Add a widget', items: QUICK_WIDGETS.map(type => ({ label: WIDGET_TYPES[type], run: () => addWidgetAt(type, at) })) },
+    { label: 'Move widgets', hint: 'Alt+drag', run: startArranging },
+    { label: 'All apps', hint: 'Ctrl+Space', run: () => drawer.show() },
     '-',
     { label: manualPause ? 'Resume animation' : 'Pause animation', run: () => { manualPause = !manualPause; updatePause(); } },
     { label: cfg.general.sound.muted ? 'Unmute sounds' : 'Mute sounds', run: () => { cfg.general.sound.muted = !cfg.general.sound.muted; changed(); toast(cfg.general.sound.muted ? 'Sounds muted' : 'Sounds on'); } },
-    { label: 'Use this as my lock screen', run: () => setLockscreenFromDesktop() },
     '-',
     { label: 'Quit Aerie', run: () => { if (confirm('Quit Aerie? Your normal wallpaper comes back.')) api.shell('quit'); } },
   );
   sound.play('click');
-  menu.show(e.clientX, e.clientY, items, w ? WIDGET_TYPES[w.type] : o ? (o.name || 'Object') : '');
+  menu.show(e.clientX, e.clientY, items, w ? WIDGET_TYPES[w.type] : '');
 });
+
+function setWallpaper(choice) {
+  document.body.classList.add('switching');
+  setTimeout(() => {
+    cfg.wallpaper = choice;
+    if (cfg.screens) delete cfg.screens[String(MONITOR)];
+    changed();
+    requestAnimationFrame(() => document.body.classList.remove('switching'));
+    sound.play('success');
+  }, 280);
+}
 
 function addWidgetAt(type, at) {
   const w = defaultWidget(type);
@@ -333,29 +300,9 @@ function removeWidget(w) {
   toast('Widget removed — press Ctrl+Z to bring it back');
 }
 
-function surprise() {
-  const names = Object.keys(PRESETS).filter(n => n !== cfg.presetName);
-  editor.applyPreset(names[Math.floor(Math.random() * names.length)]);
-}
-
-/** Takes a picture of this screen (with your lock screen choices) and makes it the lock screen. */
-async function setLockscreenFromDesktop() {
-  const lock = cfg.general.lock || {};
-  const overlay = $('#lock-overlay');
-  overlay.style.setProperty('--dim', lock.darken ?? 0);
-  overlay.dataset.pos = lock.messagePos || 'bottom';
-  overlay.querySelector('.lo-msg').textContent = lock.message || '';
-  toast('Taking a picture of your desktop…');
-  try {
-    await api.setLockscreen({ source: 'scene', widgets: !!lock.widgets });
-    sound.play('success');
-    toast('Lock screen updated');
-    return true;
-  } catch (err) { toast('Could not set the lock screen: ' + err.message); return false; }
-}
-
 let toastTimer;
 function toast(msg) {
+  if (MODE === 'lock') return;
   const t = $('#toast');
   t.textContent = msg;
   t.hidden = false;
@@ -366,12 +313,12 @@ function toast(msg) {
   toastTimer = setTimeout(() => { t.hidden = true; }, 2600);
 }
 
-// ---- keyboard and hot corner -----------------------------------------------------
+// ---- keyboard -------------------------------------------------------------------
 window.addEventListener('keydown', e => {
+  if (MODE !== 'desktop') return;
   const typing = /^(INPUT|TEXTAREA|SELECT)$/.test(document.activeElement?.tagName);
-  if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'e') { e.preventDefault(); editor.open ? closeEditor() : openEditor(); }
+  if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'e') { e.preventDefault(); api.shell('studio'); }
   else if ((e.ctrlKey || e.metaKey) && e.key === ' ') { e.preventDefault(); drawer.open ? drawer.hide() : drawer.show(); }
-  else if (e.key === 'Escape' && editor.open) { e.preventDefault(); closeEditor(); }
   else if (e.key === 'Escape' && arranging) { e.preventDefault(); stopArranging(); }
   else if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'z' && lastRemoved && !typing) {
     e.preventDefault();
@@ -379,10 +326,6 @@ window.addEventListener('keydown', e => {
     lastRemoved = null;
     changed();
     toast('Widget is back');
-  }
-  else if (e.key === 'Delete' && editor.open && !typing) {
-    if (widgets.selectedId) { cfg.widgets = cfg.widgets.filter(w => w.id !== widgets.selectedId); widgets.select(null); editor.selectWidget(null); changed(); }
-    else if (scene.selectedId) { cfg.objects = cfg.objects.filter(o => o.id !== scene.selectedId); scene.select(null); editor.selectObject(null); changed(); }
   }
 });
 
@@ -395,7 +338,7 @@ window.addEventListener('pointermove', e => {
     api.shell('pause-overridden');
   }
   const corner = cfg?.general.drawerCorner;
-  if (!corner || corner === 'none' || editor.open || drawer.open) return;
+  if (MODE !== 'desktop' || !corner || corner === 'none' || drawer.open) return;
   const top = e.clientY < 6, bottom = e.clientY > innerHeight - 6, left = e.clientX < 6, right = e.clientX > innerWidth - 6;
   const hit = { 'top-left': top && left, 'top-right': top && right, 'bottom-left': bottom && left, 'bottom-right': bottom && right }[corner];
   if (hit && !cornerTimer) cornerTimer = setTimeout(() => { drawer.show(); cornerTimer = null; }, 180);
@@ -409,11 +352,11 @@ let pauseOverridden = false; // ...but the mouse is on the wallpaper, so it can'
 let manualPause = false;     // paused from the right-click menu
 let paused = false;
 function updatePause() {
-  // never while you're looking at it: editor, app drawer or moving widgets
-  const now = (manualPause || (pauseWanted && !pauseOverridden)) && !editor.open && !drawer.open && !arranging;
+  const now = (manualPause || (pauseWanted && !pauseOverridden)) && !drawer.open && !arranging;
   if (now === paused) return;
   paused = now;
-  scene.setPaused(now);
+  scene.setPaused(now || kind !== 'scene');
+  wall.setPaused(now);
   sound.setPaused(now);
   document.body.classList.toggle('paused', now);
   const video = $('#bg-video');
@@ -422,21 +365,14 @@ function updatePause() {
 
 // widgets drift with the camera
 (function parallaxLoop() {
-  if (paused) { requestAnimationFrame(parallaxLoop); return; }
-  widgets.updateParallax(scene.pointerSmooth.x * (cfg?.camera.mode === 'fixed' ? 0 : cfg?.camera.strength ?? 1), scene.pointerSmooth.y * (cfg?.camera.strength ?? 1));
   requestAnimationFrame(parallaxLoop);
+  if (paused || !cfg) return;
+  const p = kind === 'scene' ? scene.pointerSmooth : wall.par;
+  const k = cfg.camera.mode === 'fixed' && kind === 'scene' ? 0 : (kind === 'scene' ? cfg.camera.strength ?? 1 : 0.6);
+  widgets.updateParallax(p.x * k, (kind === 'scene' ? p.y : -p.y) * k);
 })();
 
-$('#edit-button').addEventListener('click', openEditor);
-
 // ---- interface sounds -----------------------------------------------------------------
-$('#editor').addEventListener('click', e => {
-  if (e.target.closest('.preset')) return; // presets play their own sound once applied
-  if (e.target.closest('button, .tab, .upload')) sound.play('click');
-});
-$('#editor').addEventListener('change', e => {
-  if (e.target.type === 'checkbox') sound.play(e.target.checked ? 'toggleOn' : 'toggleOff');
-});
 $('#widgets').addEventListener('click', e => {
   const b = e.target.closest('button');
   if (b && !b.closest('.app') && !b.classList.contains('app')) sound.play(b.classList.contains('app-star') ? 'toggleOn' : 'click');
@@ -452,31 +388,47 @@ document.addEventListener('pointerover', e => {
 // Fade the soundscape out while music or a video is playing (checked only while ambient sound is on).
 setInterval(async () => {
   const s = cfg?.general.sound;
-  if (MONITOR !== 0 || !s?.ambient || !s.pauseForMusic || cfg.scene.sound === 'none' || STANDALONE) { sound.duck(false); return; }
+  if (MODE !== 'desktop' || MONITOR !== 0 || !s?.ambient || !s.pauseForMusic || cfg.scene.sound === 'none' || STANDALONE) { sound.duck(false); return; }
   const np = await api.nowPlaying();
   sound.duck(np?.active && np.playing);
 }, 5000);
 
 window.aerie = {
   setPaused(on, reason = '') { pauseWanted = !!on; pauseReason = reason; pauseOverridden = false; updatePause(); },
-  openEditor,
-  closeEditor,
   openDrawer: () => drawer.show(),
+  arrange: () => startArranging(),
   async reloadConfig() {
-    if (editor.open) return; // this window is the one being edited
     const saved = await api.loadConfig();
-    if (saved) { cfg = normalizeConfig(saved); applyAll(); }
+    if (saved) { cfg = normalizeConfig(saved); await libraryItems(true); applyAll(); }
   },
+  /** Snapshot helpers for the lock screen picture and previews. */
+  kind: () => kind,
 };
+
+// Aerie Studio drives its preview through messages
+window.addEventListener('message', e => {
+  if (MODE !== 'preview' || e.origin !== location.origin || !e.data?.aerie) return;
+  const m = e.data;
+  if (m.type === 'config') { cfg = normalizeConfig(m.config); if (m.fresh) libraryItems(true).then(applyAll); else applyAll(); }
+  if (m.type === 'edit') { scene.setEditMode(!!m.on); widgets.setEditMode(!!m.on); widgets.apply(cfg); }
+  if (m.type === 'select-object') scene.select(m.id);
+  if (m.type === 'select-widget') widgets.select(m.id);
+});
 
 // ---- start ----------------------------------------------------------------
 (async function start() {
-  cfg = normalizeConfig(await api.loadConfig());
-  applyAll();
-  document.body.dataset.monitor = MONITOR;
-  if (cfg.general.editorHint && MONITOR === 0) {
-    toast('Welcome to Aerie — pick a look in the panel on the right, or right-click the desktop any time');
+  if (MODE === 'preview') {
+    document.body.dataset.monitor = MONITOR;
+    toStudio({ type: 'ready' });
+    return; // Studio sends the setup to show
   }
-  if (STANDALONE) toast('Preview mode: changes are not saved');
-  if (new URLSearchParams(location.search).get('edit') === '1') openEditor();
+  cfg = normalizeConfig(await api.loadConfig());
+  await applyAll();
+  document.body.dataset.monitor = MONITOR;
+  if (MODE === 'desktop' && !cfg.general.welcomed && MONITOR === 0 && !STANDALONE) {
+    cfg.general.welcomed = true;
+    scheduleSave();
+    setTimeout(() => toast('Welcome to Aerie! Press Super+D for the hub, or right-click the desktop'), 1200);
+  }
 })();
+

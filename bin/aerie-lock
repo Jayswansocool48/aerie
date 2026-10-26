@@ -1,0 +1,15 @@
+#!/bin/sh
+# Aerie's lock screen (see aerie/lock.py). COSMIC starts it in place of its own lock screen
+# once you turn the Aerie lock screen on; "aerie-lock --preview" shows it without locking.
+SELF=$(readlink -f "$0")
+APPDIR=$(dirname "$(dirname "$SELF")")
+[ -d "$APPDIR/aerie" ] || APPDIR=/usr/lib/aerie
+for dir in "$APPDIR/lib" "$APPDIR"/build/layer-shell-*/lib; do
+  if [ -f "$dir/libgtk4-layer-shell.so.0" ]; then
+    export LD_LIBRARY_PATH="$dir${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}"
+    export GI_TYPELIB_PATH="$dir/girepository-1.0${GI_TYPELIB_PATH:+:$GI_TYPELIB_PATH}"
+    break
+  fi
+done
+export PYTHONPATH="$APPDIR${PYTHONPATH:+:$PYTHONPATH}"
+exec python3 -m aerie.lock "$@"
