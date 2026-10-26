@@ -12,6 +12,7 @@ Window mode (--window) shows the wallpaper in a normal window, for testing or ot
 
 import ctypes
 import json
+import os
 import signal
 import sys
 import threading
@@ -242,7 +243,7 @@ class AerieApp(Gtk.Application):
     def make_hub(self):
         win = Gtk.Window(application=self, title="Aerie hub")
         win.add_css_class("aerie-surface")
-        url = self.server.url_for("hub.html", monitor=-1)
+        url = self.server.url_for("hub.html", monitor=-1, extra="&keys=1" if os.environ.get("AERIE_DEBUG_KEYS") else "")
         view = surfaces.page_view(url, debug=self.debug, log=log, on_message=self.on_hub_message,
                                   allowed_prefix=f"http://127.0.0.1:{self.server.port}/")
         win.set_child(view)
@@ -296,7 +297,7 @@ class AerieApp(Gtk.Application):
 
     def on_hub_message(self, msg):
         kind = msg.get("type")
-        log(f"hub says: {kind}")
+        log(f"hub says: {kind}" + (f" {msg.get('key')}" if kind == "key" else ""))
         if kind == "close":
             self.close_hub()
         elif kind == "studio":

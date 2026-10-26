@@ -405,6 +405,7 @@ function power() {
 }
 
 post({ type: 'ready' });
+if (new URLSearchParams(location.search).get('keys')) addEventListener('keydown', e => post({ type: 'key', key: e.key === ' ' ? 'space' : e.key.length === 1 ? 'char' : e.key }), true);
 
 // opened directly in a browser (testing): show it right away
 if (!window.webkit?.messageHandlers?.aerie) window.hub.open(new URLSearchParams(location.search).get('tab'));

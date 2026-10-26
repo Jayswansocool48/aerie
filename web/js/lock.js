@@ -135,4 +135,5 @@ async function battery() {
   wake();
   $('#password').focus();
   post({ type: 'ready' });
+  if (params.get('keys')) addEventListener('keydown', e => post({ type: 'key', key: e.key.length === 1 ? 'char' : e.key }), true);
 })();

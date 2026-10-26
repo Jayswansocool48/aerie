@@ -243,7 +243,8 @@ class LockApp(Gtk.Application):
         win.set_child(overlay)
         base = Gtk.Box()
         overlay.set_child(base)
-        url = self.server.url_for("lock.html", monitor=index, extra="&preview=1" if self.mode == "preview" else "")
+        extra = ("&preview=1" if self.mode == "preview" else "") + ("&keys=1" if os.environ.get("AERIE_DEBUG_KEYS") else "")
+        url = self.server.url_for("lock.html", monitor=index, extra=extra)
         page = surfaces.page_view(url, on_message=lambda msg, w=win: self.on_page_message(w, msg), log=log)
         page.set_hexpand(True)
         page.set_vexpand(True)
@@ -280,7 +281,7 @@ class LockApp(Gtk.Application):
 
     def on_page_message(self, win, msg):
         kind = msg.get("type")
-        log(f"page says: {kind}")
+        log(f"page says: {kind}" + (f" {msg.get('key')}" if kind == "key" else ""))
         if kind == "unlock":
             password = msg.get("password")
             if not isinstance(password, str) or self.checking:

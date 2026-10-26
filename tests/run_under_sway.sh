@@ -6,6 +6,7 @@ mkdir -p "$OUT" "$XDG_RUNTIME_DIR"
 chmod 700 "$XDG_RUNTIME_DIR"
 export HOME="$PWD/build/home"
 unset XDG_CONFIG_HOME XDG_DATA_HOME XDG_CACHE_HOME  # GitHub sets these; use the test home
+export AERIE_DEBUG_KEYS=1  # pages report which keys reach them
 mkdir -p "$HOME/.config/aerie"
 LOG="$OUT/run.log"
 : > "$LOG"
@@ -86,7 +87,7 @@ shot locked 8
 if grep -q " locked$" "$HOME/.cache/aerie-lock.log" 2>/dev/null; then say "the screen locked"; else say "FAIL: the screen did not lock"; fi
 wtype -d 60 "wrong-password"; sleep 0.5; wtype -k Return
 shot wrong-password 4
-grep "page says" "$HOME/.cache/aerie-lock.log" | tail -3 >>"$LOG"
+grep -c "page says: key" "$HOME/.cache/aerie-lock.log" | sed "s/^/keys that reached the lock screen: /" >>"$LOG"; grep "page says" "$HOME/.cache/aerie-lock.log" | tail -4 >>"$LOG"
 wtype -d 60 "aerie-test-pw"; sleep 0.5; wtype -k Return
 sleep 4
 if grep -q "wrong password" "$HOME/.cache/aerie-lock.log" 2>/dev/null; then say "a wrong password was refused"; else say "FAIL: the wrong password wasn't refused"; fi
