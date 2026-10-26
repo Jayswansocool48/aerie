@@ -32,6 +32,9 @@ jobs:
           python3 tests/test_library.py
 
       - name: Install a headless desktop and Aerie's libraries
+        timeout-minutes: 12
+        env:
+          DEBIAN_FRONTEND: noninteractive
         run: |
           sudo apt-get update -qq
           sudo apt-get install -y --no-install-recommends sway grim wtype wl-clipboard xwayland \
@@ -50,6 +53,7 @@ jobs:
           ls build/layer-shell-v1.3.0/lib/girepository-1.0
 
       - name: Run Aerie under sway
+        timeout-minutes: 8
         env:
           XDG_RUNTIME_DIR: /tmp/rt
           WLR_BACKENDS: headless
