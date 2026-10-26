@@ -9,6 +9,14 @@ on:
     branches: [main]
   pull_request:
   workflow_dispatch:
+    inputs:
+      publish:
+        description: Also put the screenshots on the ci-screenshots branch (easy to view)
+        type: boolean
+        default: false
+
+permissions:
+  contents: write
 
 jobs:
   run-aerie:
@@ -50,6 +58,23 @@ jobs:
           WEBKIT_DISABLE_DMABUF_RENDERER: "1"
           LIBGL_ALWAYS_SOFTWARE: "1"
         run: tests/run_under_sway.sh
+
+      - name: Show what happened
+        if: always()
+        run: |
+          while IFS= read -r line; do echo "::notice title=Aerie run::$line"; done < shots/run.log || true
+          for f in shots/aerie.log shots/aerie-lock.log shots/aerie.out shots/lock.out; do
+            [ -s "$f" ] && tail -n 25 "$f" | while IFS= read -r line; do echo "::notice title=$(basename "$f")::$line"; done
+          done || true
+
+      - name: Publish screenshots to the ci-screenshots branch
+        if: always() && github.event_name == 'workflow_dispatch' && inputs.publish
+        run: |
+          cd shots
+          git init -q -b ci-screenshots
+          git -c user.name=ci -c user.email=ci@users.noreply.github.com add .
+          git -c user.name=ci -c user.email=ci@users.noreply.github.com commit -qm "Screenshots from ${GITHUB_SHA::7}"
+          git push -qf "https://x-access-token:${{ github.token }}@github.com/${{ github.repository }}.git" ci-screenshots
 
       - uses: actions/upload-artifact@v4
         if: always()
