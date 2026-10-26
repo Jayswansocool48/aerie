@@ -74,7 +74,7 @@ bin/aerie --hub --tab=apps >>"$OUT/aerie.out" 2>&1; sleep 3
 typ "vim"; sleep 2
 shot hub-apps 1
 key Escape; sleep 3
-grep "hub says\|hub active" "$HOME/.cache/aerie.log" | tail -6 >>"$LOG"
+grep "hub says" "$HOME/.cache/aerie.log" | tail -6 >>"$LOG"
 grep -q "hub says: close" "$HOME/.cache/aerie.log" && say "Esc closed the hub" || say "FAIL: Esc didn't close the hub"
 shot hub-closed 1
 
