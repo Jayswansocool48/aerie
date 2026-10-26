@@ -42,6 +42,9 @@ jobs:
             meson ninja-build gcc pkg-config libgtk-4-dev libwayland-dev wayland-protocols \
             gobject-introspection libgirepository1.0-dev fonts-noto-cjk dbus-x11 \
             gstreamer1.0-libav gstreamer1.0-plugins-good
+          # GitHub's runner stops programs from making the user namespaces WebKit's sandbox
+          # needs (Pop!_OS allows them); allow them here so pages run sandboxed as on Pop
+          sudo sysctl -w kernel.apparmor_restrict_unprivileged_userns=0 || true
 
       - name: Build gtk4-layer-shell
         run: |
