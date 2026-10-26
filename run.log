@@ -1,0 +1,38 @@
+== sway is on wayland-1
+/tmp/test-scene.glb
+== starting Aerie
+== screenshot desktop
+== on the desktop layer
+== importing the test scene
+imported 7034ae21a7024e9d
+== Aerie quit
+== screenshot desktop-scene
+== opening the hub
+== screenshot hub
+== screenshot hub-wallpaper
+== screenshot hub-stats
+== screenshot hub-apps
+2026-10-26 19:47:25 hub active: False, page focused: False
+2026-10-26 19:47:27 hub says: key char
+2026-10-26 19:47:27 hub says: key char
+2026-10-26 19:47:27 hub says: key char
+2026-10-26 19:47:31 hub says: key Escape
+2026-10-26 19:47:31 hub says: close
+== Esc closed the hub
+== screenshot hub-closed
+== opening Aerie Studio
+== screenshot studio
+== screenshot studio-lock
+== locking the screen (as a test user with a password)
+== screenshot locked
+== the screen locked
+== screenshot wrong-password
+keys that reached the lock screen: 16
+2026-10-26 19:47:59 page says: key char
+2026-10-26 19:47:59 page says: key char
+2026-10-26 19:48:00 page says: key char
+2026-10-26 19:48:00 page says: key Shift
+== a wrong password was refused
+== unlocked with the right password
+== screenshot unlocked
+== done

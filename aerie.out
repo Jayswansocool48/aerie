@@ -1,0 +1,12 @@
+
+(__main__.py:5862): Gtk-WARNING **: 19:46:44.663: Unable to acquire the address of the accessibility bus: GDBus.Error:org.freedesktop.DBus.Error.ServiceUnknown: The name org.a11y.Bus was not provided by any .service files. If you are attempting to run GTK without a11y support, GTK_A11Y should be set to 'none'.
+
+** (process:2): WARNING **: 19:46:48.737: Can't connect to a11y bus: Could not connect: No such file or directory
+
+(__main__.py:6001): Gtk-WARNING **: 19:47:00.205: Unable to acquire the address of the accessibility bus: GDBus.Error:org.freedesktop.DBus.Error.ServiceUnknown: The name org.a11y.Bus was not provided by any .service files. If you are attempting to run GTK without a11y support, GTK_A11Y should be set to 'none'.
+
+** (process:2): WARNING **: 19:47:00.494: Can't connect to a11y bus: Could not connect: No such file or directory
+
+** (process:2): WARNING **: 19:47:14.546: Can't connect to a11y bus: Could not connect: No such file or directory
+
+** (process:2): WARNING **: 19:47:35.793: Can't connect to a11y bus: Could not connect: No such file or directory
