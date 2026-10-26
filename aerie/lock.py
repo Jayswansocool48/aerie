@@ -201,6 +201,9 @@ class LockApp(Gtk.Application):
         instance.assign_window_to_monitor(win, monitor)
 
     def on_locked(self, _instance):
+        # keys go to the password box: give each page keyboard focus inside its window
+        for win in self.windows:
+            win.page.grab_focus()
         LOCKED_MARK.touch()
         self.set_locked_hint(True)
         self.release_sleep_delay()
@@ -246,6 +249,10 @@ class LockApp(Gtk.Application):
         page.set_vexpand(True)
         overlay.add_overlay(page)
         win.page = page
+        page.set_can_focus(True)
+        page.set_focusable(True)
+        win.set_focus(page)
+        page.connect("map", lambda v: v.grab_focus())
         win.index = index
         win.wallpaper = None
         self.add_web_wallpaper(win, overlay, base)
@@ -273,6 +280,7 @@ class LockApp(Gtk.Application):
 
     def on_page_message(self, win, msg):
         kind = msg.get("type")
+        log(f"page says: {kind}")
         if kind == "unlock":
             password = msg.get("password")
             if not isinstance(password, str) or self.checking:
@@ -315,6 +323,7 @@ class LockApp(Gtk.Application):
         win.add_controller(keys)
         win.fullscreen()
         win.present()
+        win.page.grab_focus()
 
     def do_shutdown(self):
         self.release_sleep_delay()

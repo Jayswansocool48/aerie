@@ -103,6 +103,7 @@ class AerieApp(Gtk.Application):
             print(f"aerie {__version__}")
             return 0
         if opts.get("quit"):
+            log("quitting (asked from the command line)")
             self.quit()
             return 0
         hub = opts.get("tab") if opts.get("hub") else None
@@ -245,6 +246,7 @@ class AerieApp(Gtk.Application):
         view = surfaces.page_view(url, debug=self.debug, log=log, on_message=self.on_hub_message,
                                   allowed_prefix=f"http://127.0.0.1:{self.server.port}/")
         win.set_child(view)
+        win.set_focus(view)
         win.webview = view
         win.open = False
         if self.layered:
@@ -280,6 +282,7 @@ class AerieApp(Gtk.Application):
         self.hub.tab = tab
         self.hub.set_visible(True)
         self.hub.present()
+        self.hub.webview.grab_focus()
         surfaces.run_js(self.hub.webview, f"window.hub && window.hub.open({json.dumps(tab)})")
         return False
 
@@ -293,6 +296,7 @@ class AerieApp(Gtk.Application):
 
     def on_hub_message(self, msg):
         kind = msg.get("type")
+        log(f"hub says: {kind}")
         if kind == "close":
             self.close_hub()
         elif kind == "studio":
@@ -397,6 +401,7 @@ class AerieApp(Gtk.Application):
         elif action == "close-hub":
             self.close_hub()
         elif action == "studio":
+            log("opening Studio")
             self.close_hub()
             self.open_studio(extra if isinstance(extra, str) else None)
         elif action in ("front", "back") and self.layered:

@@ -49,8 +49,11 @@ cfg["wallpaper"] = {"type": "library", "id": item["id"]}
 json.dump(cfg, open(cfg_file, "w"))
 print("imported", item["id"])
 EOF
-bin/aerie --quit; sleep 2
+bin/aerie --quit
+for _ in $(seq 20); do kill -0 "$AERIE" 2>/dev/null || break; sleep 0.5; done
+if kill -0 "$AERIE" 2>/dev/null; then say "FAIL: --quit didn't stop Aerie"; kill "$AERIE"; sleep 2; else say "Aerie quit"; fi
 bin/aerie --background >>"$OUT/aerie.out" 2>&1 &
+AERIE=$!
 sleep 12
 shot desktop-scene 2
 
@@ -61,7 +64,9 @@ bin/aerie --hub --tab=wallpaper >>"$OUT/aerie.out" 2>&1
 shot hub-wallpaper 3
 bin/aerie --hub --tab=stats >>"$OUT/aerie.out" 2>&1
 shot hub-stats 3
-wtype -k Escape; sleep 1
+wtype -k Escape; sleep 2
+grep -q "hub says: close" "$HOME/.cache/aerie.log" && say "Esc closed the hub" || say "FAIL: Esc didn't close the hub"
+shot hub-closed 1
 
 say "opening Aerie Studio"
 bin/aerie --studio >>"$OUT/aerie.out" 2>&1
@@ -79,6 +84,7 @@ shot locked 8
 if grep -q " locked$" "$HOME/.cache/aerie-lock.log" 2>/dev/null; then say "the screen locked"; else say "FAIL: the screen did not lock"; fi
 wtype "wrong-password"; wtype -k Return
 shot wrong-password 4
+grep "page says" "$HOME/.cache/aerie-lock.log" | tail -3 >>"$LOG"
 wtype "aerie-test-pw"; wtype -k Return
 sleep 4
 if grep -q "wrong password" "$HOME/.cache/aerie-lock.log" 2>/dev/null; then say "a wrong password was refused"; else say "FAIL: the wrong password wasn't refused"; fi
