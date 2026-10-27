@@ -12,7 +12,7 @@
 <body class="ui lock">
   <iframe id="wall" title="" aria-hidden="true" tabindex="-1"></iframe>
   <div class="shade" id="shade"></div>
-  <div class="preview-tag" id="preview-tag" hidden>Preview — nothing is locked. Press Esc to close.</div>
+  <div class="preview-tag" id="preview-tag" hidden>Preview: your computer isn't locked. Press Esc to close.</div>
   <main class="lockui" id="ui">
     <section class="when">
       <div class="time display" id="time"></div>
@@ -22,7 +22,7 @@
     <form class="who" id="form" autocomplete="off">
       <div class="avatar" id="avatar" aria-hidden="true"></div>
       <div class="name" id="name"></div>
-      <div class="pw">
+      <div class="pw sq-within" data-sq="14" data-sq-edge="none">
         <label class="sr" for="password">Password</label>
         <input id="password" type="password" placeholder="Password" autocomplete="current-password" spellcheck="false" autofocus>
         <button type="submit" class="go" id="go" aria-label="Unlock"></button>
@@ -31,7 +31,7 @@
     </form>
   </main>
   <footer class="lockbar" id="bar">
-    <div class="np" id="np" hidden></div>
+    <div class="np" id="np" data-sq="14" hidden></div>
     <div class="right">
       <span class="battery" id="battery" hidden></span>
       <button class="icon-btn" id="sleep" type="button" aria-label="Sleep" title="Sleep"></button>

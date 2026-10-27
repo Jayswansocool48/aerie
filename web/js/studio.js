@@ -1,17 +1,24 @@
 // Aerie Studio: your wallpaper library, importing, and every setting, in a normal window.
 // A live preview on the right shows your desktop as it will look.
 import { api, clone, normalizeConfig, STANDALONE, wallpaperFor, wallpaperSettings } from './config.js';
-import { allWallpapers, currentKey, KIND_ICON, KIND_LABEL, placeholderStyle, sourceLabel } from './catalog.js';
+import { allWallpapers, cachedWallpapers, currentKey, KIND_ICON, KIND_LABEL, prefetchPreview, previewEl, sourceLabel } from './catalog.js';
+import { installCommandMenu } from './command.js';
 import { Editor } from './editor.js';
-import { fmtBytes, h, icon } from './icons.js';
+import { fmtBytes, h, icon, kbd, skeleton } from './icons.js';
 import { forgetLibrary } from './library.js';
+import { animate, installCssSprings, place, SPRINGS } from './motion.js';
+import { installSquircles } from './squircle.js';
+import { toast } from './toast.js';
+
+installCssSprings();
+installSquircles();
 
 const PAGES = [
-  ['library', 'Library', 'ライブラリ', 'grid', 'Every wallpaper you have — pick one, or add your own'],
+  ['library', 'Library', 'ライブラリ', 'grid', 'Pick a wallpaper, or add your own'],
   ['wallpaper', 'This wallpaper', '壁紙', 'sliders', 'Settings for the wallpaper you are using'],
-  ['look', '3D look', '立体', 'sparkle', 'Design your own 3D scene: shapes, particles, light and sound'],
+  ['look', '3D look', '立体', 'cube', 'Design your own 3D scene: shapes, particles, light and sound'],
   ['widgets', 'Widgets', 'ウィジェット', 'widgets', 'Clocks, to-dos, music and more, right on your desktop'],
-  ['assistant', 'Assistant', 'アシスタント', 'sparkle', 'Describe what you want, and the AI designs it'],
+  ['assistant', 'Assistant', 'アシスタント', 'chat', 'Describe what you want, and the AI designs it'],
   ['desktop', 'Desktop', 'デスクトップ', 'desktop', 'Your real COSMIC panel, dock, glass and windows'],
   ['lock', 'Lock screen', 'ロック画面', 'lock', 'Your live wallpaper when the computer is locked'],
   ['hub', 'Hub', 'ハブ', 'keyboard', 'The panel that drops down from the top of the screen'],
@@ -80,7 +87,7 @@ function sendConfig(fresh = false) {
   sendPreview({ type: 'config', config: shown, fresh });
   sendPreview({ type: 'edit', on: page === 'look' || page === 'widgets' });
   const w = selected && page === 'library' ? selected : list.find(x => x.key === currentKey(cfg, list));
-  $('#pv-label').textContent = selected && page === 'library' && selected.key !== currentKey(cfg, list) ? 'Previewing — not in use yet' : (w ? 'In use: ' + w.title : 'Your desktop');
+  $('#pv-label').textContent = selected && page === 'library' && selected.key !== currentKey(cfg, list) ? 'Preview only, not in use yet' : (w ? 'In use: ' + w.title : 'Your desktop');
 }
 window.addEventListener('message', e => {
   if (e.origin !== location.origin || !e.data?.aerie) return;
@@ -99,19 +106,44 @@ new ResizeObserver(fitPreview).observe($('.pv-frame'));
 
 // ---- frame ---------------------------------------------------------------------------------
 function nav() {
-  $('#nav').replaceChildren(...PAGES.map(([key, label, kana]) => h('button', {
+  $('#nav').replaceChildren(...PAGES.map(([key, label, kana], i) => h('button', {
     'aria-current': key === page ? 'page' : null, onclick: () => go(key), html: icon(ICON_FOR[key]),
-  }, h('b', {}, label), h('span.kana', {}, kana))));
+    title: `${label} (Ctrl+${i + 1})`, 'aria-keyshortcuts': `Control+${i + 1}`, onpointerenter: () => prefetch(key), onfocus: () => prefetch(key),
+  }, h('b', {}, label), h('span.kana', {}, kana), kbd(`Ctrl+${i + 1}`))));
 }
+
+// pre-rendering: while your pointer rests on a page's name, Aerie fetches what that page needs
+const warm = {};
+const PREFETCH = {
+  library: () => allWallpapers().then(l => { l.slice(0, 8).forEach(prefetchPreview); return l; }),
+  lock: () => api.lockStatus(),
+  hub: () => Promise.all([api.hubShortcuts(), api.clipboard()]),
+};
+function prefetch(key) {
+  if (key === page || warm[key] || !PREFETCH[key]) return;
+  warm[key] = PREFETCH[key]().catch(() => null);
+  setTimeout(() => { delete warm[key]; }, 8000); // only fresh for a few seconds
+}
+const warmed = (key, load) => { const p = warm[key]; delete warm[key]; return p || load(); };
 
 function go(key) {
   if (!PAGES.some(p => p[0] === key)) key = 'library';
   if (page !== key && key !== 'library') selected = null;
-  page = key;
-  nav();
-  render();
-  $('#main').scrollTop = 0;
-  sendConfig();
+  const from = PAGES.findIndex(p => p[0] === page), to = PAGES.findIndex(p => p[0] === key);
+  const change = () => {
+    page = key;
+    nav();
+    render();
+    $('#main').scrollTop = 0;
+    sendConfig();
+  };
+  // view transitions: the title and the preview morph from one page to the next. Where WebKit
+  // can't do that yet, the new page slides in on a spring instead.
+  if (document.startViewTransition && from !== to) document.startViewTransition(change);
+  else {
+    change();
+    if (from !== to) { place(pageEl, { y: (to > from ? 1 : -1) * 14, opacity: 0 }); animate(pageEl, { y: 0, opacity: 1 }, { config: SPRINGS.snappy }); }
+  }
 }
 
 function render() {
@@ -137,18 +169,9 @@ function editorPage(tab) {
   editor.render();
 }
 
-let toastTimer;
-function toast(msg) {
-  const t = $('#toast');
-  t.textContent = msg;
-  t.hidden = false;
-  clearTimeout(toastTimer);
-  toastTimer = setTimeout(() => { t.hidden = true; }, 3200);
-}
-
 function notice(kind, title, text, ...actions) {
   const ico = { info: 'info', warn: 'info', good: 'check', steam: 'steam', cube: 'cube' }[kind] || 'info';
-  return h('div.notice.' + kind, {}, h('span', { html: icon(ico) }), h('div', {}, h('h3', {}, title), h('p', {}, text), actions.length ? h('div.acts', {}, ...actions) : ''));
+  return h('div.notice.' + kind, { 'data-sq': 14 }, h('span', { html: icon(ico) }), h('div', {}, h('h3', {}, title), h('p', {}, text), actions.length ? h('div.acts', {}, ...actions) : ''));
 }
 
 function section(title, kana, ...kids) {
@@ -184,9 +207,9 @@ function segFor(obj, key, options, onChange) {
 // ---- Library -----------------------------------------------------------------------------------
 async function library() {
   $('#tools').append(
-    h('button.btn', { onclick: () => pick(false) }, h('span', { html: icon('upload') }), 'Add a file…'),
-    h('button.btn', { onclick: () => pick(true) }, h('span', { html: icon('folder') }), 'Add a folder…'),
-    h('button.btn', { onclick: addSite }, h('span', { html: icon('globe') }), 'Add a web site…'),
+    h('button.btn', { onclick: () => pick(false), title: 'Add a file (Ctrl+O)' }, h('span', { html: icon('upload') }), 'Add a file…', kbd('Ctrl+O')),
+    h('button.btn', { onclick: () => pick(true), title: 'Add a folder (Ctrl+Shift+O)' }, h('span', { html: icon('folder') }), 'Add a folder…'),
+    h('button.btn', { onclick: addSite, title: 'Add a web site (Ctrl+L)' }, h('span', { html: icon('globe') }), 'Add a web site…'),
   );
   const search = h('input.input', { type: 'search', placeholder: 'Search your wallpapers…', value: libQuery, 'aria-label': 'Search wallpapers' });
   const filters = [['all', 'All'], ['aerie', 'Aerie scenes'], ['model', '3D scenes'], ['image', 'Pictures'], ['video', 'Videos'], ['web', 'Web'], ['steam', 'Wallpaper Engine']];
@@ -194,12 +217,23 @@ async function library() {
     libFilter = k; for (const c of chips.children) c.setAttribute('aria-pressed', String(c === e.currentTarget)); paintGrid();
   } }, label)));
   const body = h('div.st-page');
-  pageEl.append(h('div.lib-bar', {}, h('label.search', {}, h('span', { html: icon('search') }), search), chips), body);
+  const status = h('span.updating', { hidden: true }, 'Updating');
+  pageEl.append(h('div.lib-bar', {}, h('label.search', {}, h('span', { html: icon('search') }), search), chips, status),
+    h('p.st-rules', {}, 'Only add wallpapers you made or have the right to use. Aerie keeps them on this computer and never uploads them anywhere. To report a Steam Workshop wallpaper, use its page on Steam.'),
+    body);
   let t;
   search.addEventListener('input', () => { clearTimeout(t); t = setTimeout(() => { libQuery = search.value; paintGrid(); }, 120); });
+  const hiddenKeys = new Set(); // removed, waiting for the undo toast to go away
+  window.studioLibrary = { hide: k => { hiddenKeys.add(k); paintGrid(); }, show: k => { hiddenKeys.delete(k); paintGrid(); } };
 
-  list = await allWallpapers(true);
-  const steam = await api.steam();
+  // stale-while-revalidate: draw the last list you saw (or skeleton tiles) right away
+  let steam = { count: 0 };
+  const shown = list.length ? list : cachedWallpapers();
+  if (shown) { list = shown; paintGrid(); } else body.append(h('div.lib-grid', {}, skeleton('tiles', 8)));
+  status.hidden = false;
+  [list, steam] = await Promise.all([warmed('library', () => allWallpapers(true)), api.steam()]);
+  status.hidden = true;
+  if (page !== 'library' || !body.isConnected) return;
   const keys = await api.hubShortcuts();
   if (!keys.installed && !STANDALONE) {
     body.before(notice('info', 'Open the hub with Super+D', 'The hub drops down from the top of the screen with quick controls, stats, clipboard history, apps and wallpapers. Turn on the shortcut to open it from anywhere (you can also push the mouse to the top middle of the screen).',
@@ -210,17 +244,18 @@ async function library() {
   function card(w) {
     const inUse = w.key === currentKey(cfg, list);
     return h('button.wp', {
-      'aria-pressed': String(selected?.key === w.key), title: w.title,
-      onclick: () => { selected = w; paintGrid(); details(); sendConfig(); },
+      'data-key': w.key, 'aria-pressed': String(selected?.key === w.key), title: `${w.title} (double-click or Enter to use)`, 'data-sq': 14,
+      onclick: () => { selected = w; paintGrid(); details(); sendConfig(); body.querySelector('.wp[aria-pressed="true"]')?.focus(); },
       ondblclick: () => use(w),
-    }, w.preview ? h('img.thumb', { src: w.preview, alt: '', loading: 'lazy' }) : h('div.ph', { style: { background: placeholderStyle(w) }, html: icon(KIND_ICON[w.kind] || 'wallpaper') }),
+      onpointerenter: () => prefetchPreview(w),
+    }, previewEl(w, 'thumb'),
     h('span.badge', {}, KIND_LABEL[w.kind] || ''), inUse ? h('span.inuse', {}, 'In use') : '',
     h('span.meta', {}, h('b', {}, w.title), h('small', {}, sourceLabel(w))));
   }
 
   function paintGrid() {
     const q = libQuery.trim().toLowerCase();
-    const match = w => (!q || w.title.toLowerCase().includes(q) || (w.tagline || '').toLowerCase().includes(q))
+    const match = w => !hiddenKeys.has(w.key) && (!q || w.title.toLowerCase().includes(q) || (w.tagline || '').toLowerCase().includes(q))
       && (libFilter === 'all' || (libFilter === 'aerie' ? w.source === 'default' || w.kind === 'look'
         : libFilter === 'steam' ? ['steam', 'wallpaper-engine'].includes(w.source) : libFilter === 'web' ? ['web', 'url'].includes(w.kind) : w.kind === libFilter))
       && (cfg.general.hub?.showMature || w.rating !== 'mature');
@@ -251,7 +286,7 @@ function steamNotice(steam) {
   return notice('steam', 'Use your Wallpaper Engine wallpapers',
     steam.steam
       ? 'Steam is installed, but no Wallpaper Engine wallpapers were found. Install Wallpaper Engine in Steam (it needs Proton: right-click it → Properties → Compatibility), then subscribe to wallpapers in its Workshop; they appear here by themselves.'
-      : 'If you own Wallpaper Engine on Steam, install Steam, then Wallpaper Engine (with Proton) and subscribe to wallpapers — they appear here by themselves. You can also add a Wallpaper Engine folder (with project.json) or a .zip with "Add a folder…".',
+      : 'If you own Wallpaper Engine on Steam, install Steam, then Wallpaper Engine (with Proton) and subscribe to wallpapers. Aerie finds them by itself. You can also add a Wallpaper Engine folder (with project.json) or a .zip with "Add a folder…".',
     h('button.btn.small', { onclick: () => pick(true) }, 'Add a Wallpaper Engine folder…'));
 }
 
@@ -323,19 +358,45 @@ function details() {
       inUse ? h('button.btn.mint', { disabled: true }, h('span', { html: icon('check') }), 'In use') : h('button.btn.primary', { onclick: () => use(w) }, 'Use as my wallpaper'),
       inUse ? h('button.btn', { onclick: () => go('wallpaper') }, 'Settings') : '',
       w.item && w.source !== 'default' ? h('button.btn.ghost', { onclick: async () => {
-        const name = prompt('New name:', w.title);
-        if (name) { await api.updateWallpaper(w.key, { title: name }); forgetLibrary(); selected.title = name; render(); }
+        const name = (prompt('New name:', w.title) || '').trim();
+        if (!name || name === w.title) return;
+        // optimistic: the new name shows at once; if Aerie can't save it, the old one comes back
+        const old = w.title;
+        w.title = name; if (w.item) w.item.title = name;
+        render();
+        try { await api.updateWallpaper(w.key, { title: name }); forgetLibrary(); } catch { w.title = old; if (w.item) w.item.title = old; render(); toast('Couldn\'t rename it'); }
       } }, 'Rename') : '',
-      canRemove ? h('button.btn.danger', { onclick: async () => {
-        const steam = w.source === 'steam';
-        if (!confirm(steam ? `Hide "${w.title}" from Aerie? (To delete it, unsubscribe in Steam.)` : `Remove "${w.title}" from your library? Its copy in Aerie is deleted.`)) return;
-        await api.removeWallpaper(w.key);
-        if (inUse) { cfg.wallpaper = { type: 'default' }; changed(true); }
-        selected = null; forgetLibrary(); render(); toast(steam ? 'Hidden' : 'Removed');
-      } }, w.source === 'steam' ? 'Hide' : 'Remove') : ''),
+      canRemove ? h('button.btn.danger', { onclick: () => removeWallpaper(w), title: (w.source === 'steam' ? 'Hide' : 'Remove') + ' (Del)' }, w.source === 'steam' ? 'Hide' : 'Remove', kbd('Del')) : ''),
     w.kind === 'url' ? h('p.small', {}, 'Web sites load live from the internet and run as your wallpaper. Their own privacy policy applies.') : '',
     w.kind === 'web' ? h('p.small', {}, 'Web wallpapers run in a sandbox: they can\'t see your files, Aerie\'s settings or your browser.') : '',
   );
+}
+
+/** Remove (or, for Steam, hide) a wallpaper. It disappears now; Aerie deletes it once the
+ *  undo toast goes away, so Undo brings it straight back. */
+function removeWallpaper(w) {
+  const steam = w.source === 'steam';
+  const inUse = w.key === currentKey(cfg, list);
+  const before = { wallpaper: cfg.wallpaper, screens: cfg.screens };
+  const tiles = [...document.querySelectorAll('.wp')];
+  const at = tiles.findIndex(t => t.dataset.key === w.key);
+  const hadFocus = document.activeElement === tiles[at];
+  const next = (tiles[at + 1] || tiles[at - 1])?.dataset.key;
+  window.studioLibrary?.hide(w.key);
+  // keep your place: focus moves to the tile beside the one you removed
+  if (hadFocus && next) [...document.querySelectorAll('.wp')].find(t => t.dataset.key === next)?.focus();
+  if (selected?.key === w.key) selected = null;
+  if (inUse) { cfg.wallpaper = { type: 'default' }; cfg.screens = {}; changed(true); }
+  details();
+  toast(steam ? `Hid "${w.title}". To delete it, unsubscribe in Steam.` : `Removed "${w.title}"`, {
+    undo: () => {
+      window.studioLibrary?.show(w.key);
+      if (inUse) { Object.assign(cfg, before); changed(true); }
+    },
+    commit: async () => {
+      try { await api.removeWallpaper(w.key); forgetLibrary(); list = list.filter(x => x.key !== w.key); } catch { window.studioLibrary?.show(w.key); toast(`Couldn't remove "${w.title}"`); }
+    },
+  });
 }
 
 // ---- This wallpaper ----------------------------------------------------------------------------
@@ -427,7 +488,7 @@ const hexToWe = hex => [1, 3, 5].map(i => (parseInt(hex.slice(i, i + 2), 16) / 2
 
 // ---- Lock screen ---------------------------------------------------------------------------------
 async function lock() {
-  const st = await api.lockStatus();
+  const st = await warmed('lock', () => api.lockStatus());
   const opts = cfg.general.lockScreen;
   const toggle = h('input.switch', { type: 'checkbox', role: 'switch', checked: !!st.enabled, 'aria-label': 'Use Aerie as my lock screen' });
   toggle.addEventListener('change', async () => {
@@ -440,8 +501,8 @@ async function lock() {
     } catch (e) { toast(e.message); toggle.checked = !toggle.checked; }
     render();
   });
-  pageEl.append(h('div.big-toggle', {}, h('div.ico', { html: icon('lock') }),
-    h('div', {}, h('h3', {}, 'Use Aerie as my lock screen'), h('p', {}, st.enabled ? 'On — your live wallpaper shows when the computer is locked.' : 'Off — COSMIC\'s own lock screen is used.')), toggle));
+  pageEl.append(h('div.big-toggle', { 'data-sq': 18 }, h('div.ico', { html: icon('lock') }),
+    h('div', {}, h('h3', {}, 'Use Aerie as my lock screen'), h('p', {}, st.enabled ? 'On. Your live wallpaper shows when you lock the computer.' : 'Off. You get COSMIC\'s own lock screen.')), toggle));
   if (!st.installed) pageEl.append(notice('warn', 'Install Aerie first', 'The lock screen only works when Aerie is installed (not when running from its source folder).'));
   if (st.fellBack) pageEl.append(notice('warn', 'COSMIC\'s lock screen took over', 'Aerie\'s lock screen stopped working several times in a row, so COSMIC\'s own one is used until you log in again. Run "aerie-lock --preview" in a terminal to see what went wrong, or check ~/.cache/aerie-lock.log.'));
   pageEl.append(h('div.acts', { style: { display: 'flex', gap: '8px', flexWrap: 'wrap' } },
@@ -479,9 +540,9 @@ async function lock() {
 // ---- Hub ------------------------------------------------------------------------------------------
 async function hub() {
   const g = cfg.general;
-  const sc = await api.hubShortcuts();
+  const [sc, clip] = await warmed('hub', () => Promise.all([api.hubShortcuts(), api.clipboard()]));
   const short = { on: sc.installed };
-  pageEl.append(h('div.big-toggle', {}, h('div.ico', { html: icon('keyboard') }),
+  pageEl.append(h('div.big-toggle', { 'data-sq': 18 }, h('div.ico', { html: icon('keyboard') }),
     h('div', {}, h('h3', {}, 'Super+D opens the hub'), h('p', {}, 'Also Super+Shift+W for wallpapers. Added to COSMIC\'s own custom shortcuts.')),
     switchFor(short, 'on', async on => { try { const r = await api.setHubShortcuts(on); toast(r.installed ? 'Shortcuts added' : 'Shortcuts removed'); } catch (e) { toast(e.message); } })));
   pageEl.append(h('div', {}, h('button.btn.primary', { onclick: () => api.shell('hub') }, 'Open the hub now')));
@@ -493,14 +554,16 @@ async function hub() {
     const o = { on: g.hub.tabs.includes(k) };
     return row(label, '', switchFor(o, 'on', on => { g.hub.tabs = tabs.map(t => t[0]).filter(t => (t === k ? on : g.hub.tabs.includes(t))); if (!g.hub.tabs.length) g.hub.tabs = ['wallpaper']; changed(); }));
   })));
-  const clip = await api.clipboard();
   pageEl.append(section('Clipboard history', 'クリップボード',
     row('Keep a clipboard history', 'The last 200 things you copy, on this computer only. Secrets from password managers are never kept.',
       switchFor(g.clipboard, 'enabled', async on => { changed(); await api.clipAction('enable', '', { on }); })),
     !clip.available ? notice('warn', 'Needs wl-clipboard', 'Open a terminal and run: sudo apt install wl-clipboard') : '',
     clip.problem ? notice('warn', 'Clipboard history isn\'t working yet', clip.problem,
       h('button.btn.small', { onclick: async () => { const r = await api.clipboardAccess(true); toast(r.message); } }, 'Let apps see the clipboard (asks for your password)')) : '',
-    h('div', {}, h('button.btn.danger.small', { onclick: async () => { if (confirm('Delete your whole clipboard history, pinned items too?')) { await api.clipAction('clear', '', { all: true }); toast('Clipboard history cleared'); } } }, 'Clear clipboard history')),
+    h('div', {}, h('button.btn.danger.small', { onclick: () => toast('Clearing your whole clipboard history, pinned items too', {
+      undo: () => toast('Kept your clipboard history'),
+      commit: () => api.clipAction('clear', '', { all: true }),
+    }) }, 'Clear clipboard history')),
   ));
   pageEl.append(section('Wallpapers', '壁紙',
     row('Show wallpapers marked "Mature"', 'Wallpaper Engine wallpapers rated for adults are hidden unless you turn this on', switchFor(g.hub, 'showMature', () => changed())),
@@ -527,6 +590,34 @@ addEventListener('drop', e => {
   $('#drop').hidden = true;
   const files = [...(e.dataTransfer?.files || [])];
   if (files.length) uploadFiles(files);
+});
+
+// ---- keyboard: Ctrl+K searches everything, Ctrl+1…9 opens a page ------------------------------
+const commands = installCommandMenu(() => [
+  ...PAGES.map(([key, label, , ico, sub], i) => ({ label, group: 'Pages', icon: ICON_FOR[key] || ico, hint: `Ctrl+${i + 1}`, keywords: sub, order: i, run: () => go(key) })),
+  { label: 'Add a file…', group: 'Library', icon: 'upload', hint: 'Ctrl+O', keywords: 'import picture video glb blender', order: 20, run: () => pick(false) },
+  { label: 'Add a folder or Wallpaper Engine project…', group: 'Library', icon: 'folder', hint: 'Ctrl+Shift+O', keywords: 'import zip lively steam', order: 21, run: () => pick(true) },
+  { label: 'Add a web site…', group: 'Library', icon: 'globe', hint: 'Ctrl+L', keywords: 'url page', order: 22, run: addSite },
+  { label: 'Open the hub', group: 'Actions', icon: 'keyboard', hint: 'Super+D', order: 30, run: () => api.shell('hub') },
+  { label: 'Try the lock screen (no locking)', group: 'Actions', icon: 'eye', order: 31, run: async () => { const r = await api.previewLock(); toast(r.ok ? 'Showing a preview. Press Esc to close it.' : 'Couldn\'t open the preview'); } },
+  { label: 'Check for updates', group: 'Actions', icon: 'restart', keywords: 'upgrade version', order: 32, run: () => go('settings') },
+  ...list.filter(w => w.kind !== 'look').slice(0, 80).map(w => ({ label: w.title, group: 'Wallpapers', icon: KIND_ICON[w.kind] || 'wallpaper', keywords: `${KIND_LABEL[w.kind] || ''} ${sourceLabel(w)}`, order: 40, run: () => { if (page !== 'library') go('library'); selected = w; render(); sendConfig(); } })),
+], { placeholder: 'Search pages, actions and wallpapers…' });
+$('#cmd').append(h('span', { html: icon('search') }), h('span', {}, 'Search'), kbd('Ctrl+K'));
+$('#cmd').addEventListener('click', () => commands.open());
+
+addEventListener('keydown', e => {
+  if (commands.isOpen() || !(e.ctrlKey || e.metaKey)) return;
+  const k = e.key.toLowerCase();
+  if (/^[1-9]$/.test(k) && PAGES[+k - 1]) { e.preventDefault(); go(PAGES[+k - 1][0]); }
+  else if (k === 'o') { e.preventDefault(); pick(e.shiftKey); }
+  else if (k === 'l') { e.preventDefault(); addSite(); }
+});
+// the selected wallpaper: Enter uses it, Delete removes it (with Undo)
+addEventListener('keydown', e => {
+  if (commands.isOpen() || page !== 'library' || !selected || e.ctrlKey || e.altKey || e.target.closest?.('input, textarea, select')) return;
+  if (e.key === 'Delete' && selected.item && selected.source !== 'default') { e.preventDefault(); removeWallpaper(selected); }
+  if (e.key === 'Enter' && !e.target.closest?.('button:not(.wp)')) { e.preventDefault(); use(selected); }
 });
 
 // ---- start ----------------------------------------------------------------------------------------

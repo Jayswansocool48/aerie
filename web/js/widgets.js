@@ -622,7 +622,7 @@ export class WidgetLayer {
           cpu: [this.system.cpu, `${Math.round(this.system.cpu)}%`],
           memory: this.system.memory && [this.system.memory.percent, `${gb(this.system.memory.used)} / ${gb(this.system.memory.total)}`],
           disk: this.system.disk && [this.system.disk.percent, `${Math.round(this.system.disk.percent)}%`],
-          battery: this.system.battery && [this.system.battery.percent, `${this.system.battery.percent}% ${this.system.battery.status === 'Charging' ? '⚡' : ''}`],
+          battery: this.system.battery && [this.system.battery.percent, `${this.system.battery.percent}%${this.system.battery.status === 'Charging' ? ' charging' : ''}`],
         };
         for (const meter of node.querySelectorAll('.meter')) {
           const val = v[meter.dataset.k];
@@ -646,7 +646,7 @@ export class WidgetLayer {
             row.querySelector('.zone-time').textContent = now.toLocaleTimeString(undefined, { timeZone: z.tz, hour: '2-digit', minute: '2-digit', hour12: st.format === '12' });
             const day = now.toLocaleDateString(undefined, { timeZone: z.tz, weekday: 'short' });
             row.querySelector('.zone-day').textContent = day;
-          } catch { row.querySelector('.zone-time').textContent = '—'; }
+          } catch { row.querySelector('.zone-time').textContent = '--:--'; }
         });
         break;
       case 'countdown': {
@@ -655,7 +655,7 @@ export class WidgetLayer {
         const el = q('.cd-time');
         if (!el) break;
         if (Number.isNaN(target)) { el.textContent = 'Pick a date'; break; }
-        if (s === 0) { el.textContent = 'It’s here! 🎉'; break; }
+        if (s === 0) { el.textContent = 'It’s here'; break; }
         const d = Math.floor(s / 86400); s %= 86400;
         el.innerHTML = `${d ? `<span><b>${d}</b>d</span>` : ''}<span><b>${Math.floor(s / 3600)}</b>h</span><span><b>${pad(Math.floor((s % 3600) / 60))}</b>m</span><span><b>${pad(s % 60)}</b>s</span>`;
         break;
@@ -707,7 +707,7 @@ export class WidgetLayer {
           text = QUOTES[slot % QUOTES.length]; by = '';
         }
         const el = q('.quote-text');
-        if (el && el.textContent !== text) { el.textContent = text; q('.quote-by').textContent = by ? `— ${by}` : ''; }
+        if (el && el.textContent !== text) { el.textContent = text; q('.quote-by').textContent = by ? `${by}` : ''; }
         break;
       }
     }

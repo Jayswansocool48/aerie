@@ -1,5 +1,5 @@
 """Changes COSMIC's own look and its real taskbar: frosted glass, window corners and gaps,
-dark/light mode, and the top panel and dock themselves — where they sit, how they look,
+dark/light mode, and the top panel and dock themselves: where they sit, how they look,
 which applets they hold (clock, tray, app list…), which apps are pinned, and whether the
 dock is there at all.
 

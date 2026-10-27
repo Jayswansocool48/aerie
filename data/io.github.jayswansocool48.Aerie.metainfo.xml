@@ -13,7 +13,7 @@
 
   <description>
     <p>
-      Aerie brings live wallpapers to the COSMIC desktop, like Wallpaper Engine — on your desktop
+      Aerie brings live wallpapers to the COSMIC desktop, like Wallpaper Engine, on your desktop
       and on your lock screen. Its default themes are 3D scenes made in Blender, played live with
       their own camera, lights and animations, and moving with your mouse.
     </p>
@@ -100,6 +100,20 @@
   <content_rating type="oars-1.1" />
 
   <releases>
+    <release version="2.1.0" date="2026-10-27">
+      <description>
+        <p>A calmer look and faster, smoother controls.</p>
+        <ul>
+          <li>A new ink-and-vermilion look with solid panels in place of frosted glass, and a new icon</li>
+          <li>Everything moves on spring physics, and you can interrupt any animation</li>
+          <li>Ctrl+K searches every page, action and wallpaper in the hub and in Aerie Studio</li>
+          <li>Deleting a wallpaper, to-do or clipboard item shows an Undo button instead of asking first</li>
+          <li>Drag the hub up to close it; drag the wallpaper carousel sideways to flip through it</li>
+          <li>Wallpaper previews show a soft blur of their colors while they load</li>
+          <li>You choose whether the design assistant sees a description of your desktop</li>
+        </ul>
+      </description>
+    </release>
     <release version="2.0.0" date="2026-10-26">
       <description>
         <p>A full redesign: Aerie is now a live wallpaper app, like Wallpaper Engine.</p>

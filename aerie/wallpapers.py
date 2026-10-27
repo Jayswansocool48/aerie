@@ -78,6 +78,10 @@ def list_items(include_steam=True):
             known = {it.get("workshopId") for it in items if it.get("workshopId")}
             hidden = set(index.get("hidden") or [])
             items += [it for it in steam_items() if it["workshopId"] not in known and it["id"] not in hidden]
+        hashes = index.get("blurhash") or {}
+        for it in items:
+            if it["id"] in hashes:
+                it["blurhash"] = hashes[it["id"]]
     items.sort(key=lambda it: (it.get("source") != "default", -it.get("added", 0) if it.get("source") != "default" else 0,
                                it.get("title", "").lower()))
     return [public(it) for it in items]
@@ -154,8 +158,20 @@ def unhide_all():
         _save_index(index)
 
 
+_BLURHASH = re.compile(r"^[0-9A-Za-z#$%*+,\-.:;=?@\[\]^_{|}~]{6,60}$")
+
+
 def update(item_id, changes):
-    """Rename a wallpaper or mark it as a favorite."""
+    """Rename a wallpaper, mark it as a favorite, or keep the blurred placeholder of its preview."""
+    if "blurhash" in changes:
+        value = changes["blurhash"]
+        if not (isinstance(value, str) and _BLURHASH.match(value)) or not get(item_id):
+            return None
+        with _lock:
+            index = _load_index()
+            index.setdefault("blurhash", {})[item_id] = value
+            _save_index(index)
+        return True
     with _lock:
         index = _load_index()
         it = index["items"].get(item_id)

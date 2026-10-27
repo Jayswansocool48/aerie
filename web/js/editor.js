@@ -122,7 +122,7 @@ export class Editor {
       settings: () => this.settingsTab(body),
     })[this.tab]();
     const foot = el('footer', 'panel-foot', STANDALONE
-      ? 'Preview mode — changes are not saved'
+      ? 'Preview mode: Aerie doesn\'t save changes here'
       : 'Saves automatically · Ctrl+E editor · Ctrl+Space all apps');
     this.panel.append(header, tabs, body, foot);
     body.scrollTop = scrollTop;
@@ -173,7 +173,7 @@ export class Editor {
       card.type = 'button';
       card.setAttribute('aria-label', `Use the ${name} preset: ${p.tagline}`);
       const thumb = el('div', 'preset-thumb');
-      thumb.style.background = `linear-gradient(135deg, ${p.swatch[0]}, ${p.swatch[1]})`;
+      thumb.style.background = `linear-gradient(135deg, ${p.swatch[0]} 0 55%, ${p.swatch[1]} 55%)`; // two flat swatches
       const pic = document.createElement('img');
       pic.alt = '';
       pic.loading = 'lazy';
@@ -287,14 +287,15 @@ export class Editor {
         pick.type = 'button';
         pick.setAttribute('aria-label', `Use your look ${look.name}`);
         const thumb = el('div', 'preset-thumb');
-        thumb.style.background = 'linear-gradient(135deg, #2a2340, #11283a)';
+        thumb.style.background = '#2d2822';
         if (look.thumb) { const img = document.createElement('img'); img.src = look.thumb; img.alt = ''; thumb.appendChild(img); }
         pick.append(thumb, el('span', 'preset-name', look.name), el('span', 'preset-tag', new Date(look.saved).toLocaleDateString()));
         pick.addEventListener('click', () => this.applyMyLook(look.id));
         const del = button('×', () => {
-          if (!confirm(`Delete your look "${look.name}"?`)) return;
+          const at = looks.indexOf(look);
           this.cfg.general.myLooks = looks.filter(l => l !== look);
           this.commit(true);
+          this.cb.toast(`Deleted your look "${look.name}"`, { undo: () => { this.cfg.general.myLooks.splice(at, 0, look); this.commit(true); } });
         }, 'my-look-del');
         del.setAttribute('aria-label', `Delete ${look.name}`);
         card.append(pick, del);
@@ -325,7 +326,7 @@ export class Editor {
   async applyMyLook(id) {
     const look = (this.cfg.general.myLooks || []).find(l => l.id === id);
     if (!look) return;
-    if (!confirm(`Switch to your look "${look.name}"? This replaces the current scene, 3D objects and widgets.`)) return;
+    const before = this.snapshot();
     const swap = () => {
       Object.assign(this.cfg, normalizeConfig({ ...clone(look.data), general: this.cfg.general, wallpaper: { type: 'scene' }, screens: {}, wallpaperProps: this.cfg.wallpaperProps }), { presetName: look.name });
       this.selectedObject = this.selectedWidget = null;
@@ -333,7 +334,17 @@ export class Editor {
     };
     if (this.cb.transition) await this.cb.transition(swap); else swap();
     this.cb.sound?.('success');
-    this.cb.toast(`${look.name} applied`);
+    this.cb.toast(`${look.name} applied`, { undo: () => this.restore(before) });
+  }
+
+  /** A copy of the whole setup, for Undo. */
+  snapshot() { return clone(this.cfg); }
+
+  restore(before) {
+    for (const k of Object.keys(this.cfg)) delete this.cfg[k];
+    Object.assign(this.cfg, clone(before));
+    this.selectedObject = this.selectedWidget = null;
+    this.commit(true);
   }
 
   /** Presets with a real 360° sky download it from the online library (once, with your OK). */
@@ -361,7 +372,7 @@ export class Editor {
   /** Switches to a preset, and (if you agree) gives COSMIC's real taskbar the matching style. */
   async applyPreset(name) {
     const p = PRESETS[name];
-    if (!confirm(`Switch to "${name}"? This replaces your current scene, 3D objects and widgets.`)) return;
+    const before = this.snapshot();
     const swap = () => {
       Object.assign(this.cfg, presetConfig(name, this.cfg.general), { presetName: name, wallpaper: { type: 'scene' }, screens: {}, wallpaperProps: this.cfg.wallpaperProps || {} });
       this.selectedObject = this.selectedWidget = null;
@@ -369,7 +380,7 @@ export class Editor {
     };
     if (this.cb.transition) await this.cb.transition(swap); else swap();
     this.cb.sound?.('success');
-    this.cb.toast(`${name} applied`);
+    this.cb.toast(`${name} applied`, { undo: () => this.restore(before) });
     if (p.sky) await this.fetchPresetSky(name, p.sky);
     const mode = this.cfg.general.matchTaskbar;
     if (!p.taskbar || STANDALONE || mode === 'never') return;
@@ -437,7 +448,7 @@ export class Editor {
       );
     }
     if (!gs.ambient) {
-      snd.append(el('p', 'hint', 'Ambient sound is off.'), button('Turn on ambient sound', () => { gs.ambient = true; this.commit(true); this.cb.toast('Ambient sound on — set the volume in Settings'); }));
+      snd.append(el('p', 'hint', 'Ambient sound is off.'), button('Turn on ambient sound', () => { gs.ambient = true; this.commit(true); this.cb.toast('Ambient sound is on. Set the volume in Settings.'); }));
     } else {
       snd.append(range('Volume', gs, 'ambientVolume', 0, 1, 0.05, () => this.commit(), '', v => Math.round(v * 100) + '%'));
     }
@@ -826,7 +837,7 @@ export class Editor {
       pick.add(new Option('Looking for your models…', ''));
       api.ollamaModels().then(r => {
         pick.replaceChildren();
-        if (!r.models.length) pick.add(new Option(r.error ? 'Ollama not found — is it running?' : 'No models yet — run: ollama pull llama3.2', ''));
+        if (!r.models.length) pick.add(new Option(r.error ? 'Aerie can\'t reach Ollama. Is it running?' : 'No models yet. Run: ollama pull llama3.2', ''));
         for (const m of r.models) pick.add(new Option(m, m));
         pick.value = r.models.includes(form.model) ? form.model : (r.models[0] || '');
         form.model = pick.value;
@@ -838,10 +849,10 @@ export class Editor {
       const key = document.createElement('input');
       key.type = 'password';
       key.autocomplete = 'off';
-      key.placeholder = ai.settings.hasKey?.[ai.pick] ? 'Saved — leave empty to keep it' : 'Paste your API key';
+      key.placeholder = ai.settings.hasKey?.[ai.pick] ? 'Saved. Leave empty to keep it.' : 'Paste your API key';
       key.addEventListener('input', () => { form.key = key.value; });
       s.append(field('API key', key), text('Model', form, 'model', () => {}),
-        el('p', 'note', `When you use ${choices[ai.pick][0]}, what you type and a short description of your desktop design (colors, widget types and positions, 3D shapes — never your notes, to-dos, names or files) are sent to ${ai.pick === 'claude' ? 'Anthropic' : 'OpenAI'}, and their terms apply. Your key is stored only on this computer, readable only by you.`));
+        el('p', 'note', `When you use ${choices[ai.pick][0]}, what you type and a short description of your desktop design (colors, widget types and positions, 3D shapes; never your notes, to-dos, names or files) are sent to ${ai.pick === 'claude' ? 'Anthropic' : 'OpenAI'}, and their terms apply. Your key is stored only on this computer, readable only by you.`));
     }
     const row = el('div', 'row actions');
     row.append(button('Save and start', async () => {
@@ -878,7 +889,7 @@ export class Editor {
     log.setAttribute('role', 'log');
     log.setAttribute('aria-live', 'polite');
     const bubble = (cls, text) => { const b = el('div', 'bubble ' + cls); if (text) b.appendChild(el('p', '', text)); log.appendChild(b); return b; };
-    bubble('ai', 'Hi! Tell me how you’d like your desktop to look or feel, and I’ll design it. I can change the scene, colors, widgets, 3D objects and sounds — and you can undo anything.');
+    bubble('ai', 'Hi! Tell me how you’d like your desktop to look or feel, and I’ll design it. I can change the scene, colors, widgets, 3D objects and sounds, and you can undo anything.');
     if (!ai.chat.length) {
       const chips = el('div', 'chips ai-chips');
       for (const sug of SUGGESTIONS) chips.appendChild(button(sug, () => this.askAssistant(sug), 'chip-sug'));
@@ -902,7 +913,7 @@ export class Editor {
               const res = await api.setCosmicLook(cosmicChanges(m.cosmic));
               this.cosmic = res.look;
               m.cosmicDone = true;
-              this.cb.toast('COSMIC updated — Desktop → Undo puts it back');
+              this.cb.toast('COSMIC updated. Desktop → Undo puts it back.');
             } catch (e) { this.cb.toast('Could not change COSMIC: ' + e.message); }
             this.render();
           }, 'small'),
@@ -924,7 +935,17 @@ export class Editor {
     send.disabled = ai.busy;
     box.append(input, send);
     box.addEventListener('submit', e => { e.preventDefault(); if (input.value.trim() && !ai.busy) this.askAssistant(input.value.trim()); });
-    wrap.append(head, log, box, el('p', 'hint ai-foot', 'The assistant only helps design your desktop.'));
+    // what goes along with your message is your choice, and you can see it here
+    const g = this.cfg.general;
+    const share = document.createElement('input');
+    share.type = 'checkbox';
+    share.checked = g.assistantShare !== false;
+    share.addEventListener('change', () => { g.assistantShare = share.checked; this.commit(); });
+    const shareRow = el('label', 'ai-share');
+    shareRow.append(share, el('span', '', ai.settings.provider === 'ollama'
+      ? 'Send a short description of my desktop design (colors, widget types, 3D shapes) to Ollama on this computer'
+      : `Send a short description of my desktop design (colors, widget types, 3D shapes) to ${names[ai.settings.provider]}. Never my notes, files or app list.`));
+    wrap.append(head, log, box, shareRow, el('p', 'hint ai-foot', 'The assistant only helps design your desktop.'));
     body.appendChild(wrap);
     requestAnimationFrame(() => { log.scrollTop = log.scrollHeight; if (!ai.busy) input.focus(); });
   }
@@ -938,7 +959,7 @@ export class Editor {
     const history = ai.chat.filter(m => m.role === 'user' || m.role === 'assistant').map(m => ({ role: m.role, content: m.content }));
     try {
       setWallpaperChoices(await api.wallpapers());
-      const res = await api.assistantChat(history, buildContext(this.cfg));
+      const res = await api.assistantChat(history, this.cfg.general.assistantShare === false ? '' : buildContext(this.cfg));
       const { scene, camera, objects, widgets, theme, presetName } = this.cfg;
       const snapshot = clone({ scene, camera, objects, widgets, theme, presetName });
       const result = applyChanges(this.cfg, res.changes);
@@ -1257,7 +1278,7 @@ export class Editor {
         focused: 'While I use any app',
         never: 'Never',
       }, () => this.commit()),
-      el('p', 'hint', 'While paused, nothing moves or redraws (and the soundscape stops), so games and apps get your computer’s full speed — like Wallpaper Engine. It never pauses while the editor or app drawer is open, or while your mouse is on the wallpaper.'),
+      el('p', 'hint', 'While paused, nothing moves or redraws (and the soundscape stops), so games and apps get your computer’s full speed, like Wallpaper Engine. It never pauses while the editor or app drawer is open, or while your mouse is on the wallpaper.'),
       el('p', 'status-line', this.cb.pauseStatus?.() || ''),
       select('Open all apps from a hot corner', g, 'drawerCorner', { none: 'Off', 'top-left': 'Top-left', 'top-right': 'Top-right', 'bottom-left': 'Bottom-left', 'bottom-right': 'Bottom-right' }, () => this.commit()),
     );
@@ -1332,9 +1353,10 @@ export class Editor {
         } catch { this.cb.toast('That text is not a valid Aerie setup'); }
       }),
       button('Reset to default', () => {
-        if (!confirm('Reset everything to the default look?')) return;
+        const before = this.snapshot();
         Object.assign(this.cfg, defaultConfig());
         this.commit(true);
+        this.cb.toast('Reset to the default look', { undo: () => this.restore(before) });
       }),
     );
     b.append(el('p', 'hint', 'Images and 3D models stay on this computer and are not included in the text.'), area, row);
@@ -1363,7 +1385,7 @@ export class Editor {
 
     const p = section(body, 'Privacy');
     p.append(
-      el('p', 'hint', 'Aerie has no accounts, ads, tracking or analytics. It only goes online if you use the online library (Poly Haven) — and then only to download what you pick. Your setup, pictures and models are stored only on this computer, in ~/.config/aerie and ~/.local/share/aerie.'),
+      el('p', 'hint', 'Aerie has no accounts, ads, tracking or analytics. It only goes online if you use the online library (Poly Haven), and then only to download what you pick. Your setup, pictures and models are stored only on this computer, in ~/.config/aerie and ~/.local/share/aerie.'),
       button('Delete all my Aerie data', async () => {
         if (!confirm('Delete your setup, uploaded images and 3D models, and the login autostart? Your original COSMIC look is restored too. This cannot be undone.')) return;
         await api.deleteData().catch(() => null);
@@ -1380,7 +1402,7 @@ export class Editor {
     );
     const a = section(body, 'About');
     a.append(
-      el('p', 'hint', 'Aerie — a free, open-source live wallpaper for Pop!_OS COSMIC. 3D by three.js, desktop layer by gtk4-layer-shell (both MIT). Privacy policy, terms and refund policy: PRIVACY.md and TERMS.md, included with the app and on GitHub.'),
+      el('p', 'hint', 'Aerie: a free, open-source live wallpaper for Pop!_OS COSMIC. 3D by three.js, desktop layer by gtk4-layer-shell (both MIT). Privacy policy, terms and refund policy: PRIVACY.md and TERMS.md, included with the app and on GitHub.'),
       button('Quit Aerie', () => { if (confirm('Quit Aerie? Your normal wallpaper comes back.')) api.shell('quit'); }),
     );
     const u = section(body, 'Uninstall');

@@ -3,13 +3,13 @@ import { PRESETS } from './presets.js';
 
 const params = new URLSearchParams(location.search);
 const hash = new URLSearchParams(location.hash.slice(1));
-const TOKEN = hash.get('token') || sessionStorageGet('aerie-token') || '';
-sessionStorageSet('aerie-token', TOKEN);
+// the per-run key comes in the address fragment and stays in memory only (never in browser storage);
+// pages pass the fragment on to the pages they open
+const TOKEN = hash.get('token') || '';
 export const MONITOR = Number(params.get('monitor') || 0);
-export const STANDALONE = !TOKEN; // opened without the app (e.g. a plain file) — keep working, just without saving
+export const STANDALONE = !TOKEN; // opened without the app (e.g. a plain file): keep working, just without saving
 
-function sessionStorageGet(key) { try { return sessionStorage.getItem(key); } catch { return null; } }
-function sessionStorageSet(key, value) { try { sessionStorage.setItem(key, value); } catch { /* storage unavailable */ } }
+try { sessionStorage.removeItem('aerie-token'); } catch { /* storage unavailable */ } // older versions kept it there
 
 export const uid = () => Math.random().toString(36).slice(2, 10);
 
@@ -127,13 +127,17 @@ export function defaultScene() {
 }
 
 export function defaultConfig() {
-  // a fresh start: the first Blender scene that comes with Aerie (or the Lavender Dusk 3D look
-  // if there are none), with a clock and the date
-  const look = PRESETS['Lavender Dusk'].build();
+  // a fresh start: the first Blender scene that comes with Aerie (or, if there are none, the
+  // Lantern Lake 3D look in ink and amber), with a clock and the date
+  const look = PRESETS['Lantern Lake'].build();
+  Object.assign(look.scene.background, { type: 'gradient', color1: '#090c14', color2: '#2e1d16', angle: 180 });
+  Object.assign(look.scene.fog, { color: '#191617' });
+  Object.assign(look.scene.light, { rim: '#e45a3c' });
+  if (look.scene.field) look.scene.field.ground = '#1c2836';
   return normalizeConfig({
-    ...look, general: defaultGeneral(), wallpaper: { type: 'default' },
+    ...look, general: defaultGeneral(), wallpaper: { type: 'default' }, presetName: 'Lantern Lake',
     widgets: [defaultWidget('clock'), Object.assign(defaultWidget('date'), { y: 26 })].map(w => Object.assign(w, { card: false, x: 5 })),
-    theme: { ...look.theme, font: 'display', cardStyle: 'liquid', accent: '#ff8fb1', text: '#ffffff', widgetBg: '#1a1f44', widgetOpacity: 0.32 },
+    theme: { ...look.theme, font: 'display', cardStyle: 'solid', accent: '#e8a24a', text: '#f6efe4', widgetBg: '#1b1814', widgetOpacity: 0.72 },
   });
 }
 
@@ -222,14 +226,26 @@ async function call(method, path, body, extraHeaders = {}) {
   return data;
 }
 
+// Idempotency keys: one key per thing you asked for (this file, this web address…). A double
+// click or a retry sends the same key, and the server answers it once. After a success the key
+// is dropped, so asking again later (say, re-adding a file you removed) is a new request.
+const intents = new Map();
+async function once(intent, method, path, body, headers = {}) {
+  let key = intents.get(intent);
+  if (!key) intents.set(intent, key = (crypto.randomUUID?.() || uid() + uid() + uid()));
+  const res = await call(method, path, body, { ...headers, 'Idempotency-Key': key });
+  intents.delete(intent);
+  return res;
+}
+
 export const api = {
   loadConfig: () => call('GET', '/api/config').then(d => d.config).catch(() => null),
   saveConfig: cfg => call('PUT', '/api/config', cfg),
   apps: () => call('GET', '/api/apps').then(d => d.apps).catch(() => []),
   refreshApps: () => call('POST', '/api/apps/refresh').then(d => d.apps).catch(() => []),
-  launch: id => call('POST', '/api/launch', { id }).catch(() => ({ ok: false })),
+  launch: id => once('launch:' + id, 'POST', '/api/launch', { id }).catch(() => ({ ok: false })),
   system: () => call('GET', '/api/system').catch(() => null),
-  upload: file => call('POST', '/api/media', file, { 'X-Filename': encodeURIComponent(file.name) }).then(d => d.url),
+  upload: file => once(`media:${file.name}:${file.size}:${file.lastModified}`, 'POST', '/api/media', file, { 'X-Filename': encodeURIComponent(file.name) }).then(d => d.url),
   autostart: () => call('GET', '/api/autostart').then(d => d.enabled).catch(() => false),
   setAutostart: enabled => call('POST', '/api/autostart', { enabled }).then(d => d.enabled),
   deleteData: () => call('POST', '/api/delete-data'),
@@ -241,10 +257,10 @@ export const api = {
   wallpapers: () => call('GET', '/api/wallpapers').then(d => d.items).catch(() => []),
   steam: () => call('GET', '/api/wallpapers/steam').catch(() => ({ steam: false, count: 0 })),
   scene: id => call('GET', '/api/wallpapers/scene?id=' + encodeURIComponent(id)),
-  importPath: path => call('POST', '/api/wallpapers/import', { path }),
-  pickWallpaper: folder => call('POST', '/api/wallpapers/pick', { folder }),
-  uploadWallpaper: file => call('POST', '/api/wallpapers/upload', file, { 'X-Filename': encodeURIComponent(file.name) }),
-  addUrl: (url, title) => call('POST', '/api/wallpapers/url', { url, title }),
+  importPath: path => once('import:' + path, 'POST', '/api/wallpapers/import', { path }),
+  pickWallpaper: folder => once('pick', 'POST', '/api/wallpapers/pick', { folder }),
+  uploadWallpaper: file => once(`upload:${file.name}:${file.size}:${file.lastModified}`, 'POST', '/api/wallpapers/upload', file, { 'X-Filename': encodeURIComponent(file.name) }),
+  addUrl: (url, title) => once('url:' + url, 'POST', '/api/wallpapers/url', { url, title }),
   removeWallpaper: id => call('POST', '/api/wallpapers/remove', { id }),
   updateWallpaper: (id, changes) => call('POST', '/api/wallpapers/update', { id, ...changes }),
   unhideWallpapers: () => call('POST', '/api/wallpapers/unhide'),
@@ -252,7 +268,7 @@ export const api = {
   setControl: (name, value) => call('POST', '/api/controls', { name, value }),
   power: action => call('POST', '/api/power', { action }),
   stats: () => call('GET', '/api/stats').catch(() => null),
-  speedtest: () => call('POST', '/api/speedtest'),
+  speedtest: () => once('speedtest', 'POST', '/api/speedtest'),
   clipboard: (q = '', kind = 'all') => call('GET', `/api/clipboard?q=${encodeURIComponent(q)}&kind=${kind}`).catch(() => ({ items: [], available: false })),
   clipAction: (action, id, extra = {}) => call('POST', '/api/clipboard', { action, id, ...extra }),
   clipboardAccess: on => call('POST', '/api/system/clipboard-access', { on }),

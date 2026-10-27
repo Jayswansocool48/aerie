@@ -30,6 +30,8 @@ jobs:
           python3 tests/test_desktop_watch.py
           python3 tests/test_wetex.py
           python3 tests/test_library.py
+          python3 tests/test_replies.py
+          node tests/test_motion.mjs
 
       - name: Install a headless desktop and Aerie's libraries
         timeout-minutes: 12

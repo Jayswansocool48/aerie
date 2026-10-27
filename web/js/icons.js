@@ -48,7 +48,9 @@ const P = {
   video: 'M3 6h13v12H3zM16 10l5-3v10l-5-3',
   steam: 'M12 3a9 9 0 0 0-8.9 7.7l4.8 2a2.6 2.6 0 0 1 1.6-.4l2.2-3.2a3.5 3.5 0 1 1 3.5 3.5l-3.2 2.3a2.6 2.6 0 0 1-5.2.4L3.4 13.8A9 9 0 1 0 12 3z',
   star: 'M12 3l2.8 5.8 6.2.9-4.5 4.4 1 6.3L12 17.5 6.5 20.4l1-6.3L3 9.7l6.2-.9z',
-  sparkle: 'M12 3l1.8 4.6L18 9l-4.2 1.4L12 15l-1.8-4.6L6 9l4.2-1.4zM18 15l.9 2.1L21 18l-2.1.9L18 21l-.9-2.1L15 18l2.1-.9z',
+  chat: 'M4 5h16v11H9l-5 4zM8 9.5h8M8 12.5h5',
+  command: 'M9 6a3 3 0 1 0-3 3h12a3 3 0 1 0-3-3v12a3 3 0 1 0 3-3H6a3 3 0 1 0 3 3z',
+  undo: 'M9 14L4 9l5-5M4 9h10a6 6 0 0 1 0 12h-3',
   desktop: 'M3 5h18v11H3zM8 20h8M12 16v4',
   settings: 'M12 9a3 3 0 1 0 0 6 3 3 0 0 0 0-6zM4 12h2M18 12h2M12 4v2M12 18v2M6.3 6.3l1.4 1.4M16.3 16.3l1.4 1.4M6.3 17.7l1.4-1.4M16.3 7.7l1.4-1.4',
   widgets: 'M4 4h9v6H4zM15 4h5v6h-5zM4 12h5v8H4zM11 12h9v8h-9z',
@@ -77,13 +79,33 @@ export function h(tag, attrs = {}, ...kids) {
     if (v === undefined || v === null || v === false) continue;
     if (k.startsWith('on')) el.addEventListener(k.slice(2), v);
     else if (k === 'html') el.innerHTML = v;
-    else if (k === 'style' && typeof v === 'object') Object.assign(el.style, v);
+    else if (k === 'style' && typeof v === 'object') {
+      for (const [prop, val] of Object.entries(v)) {
+        if (prop.startsWith('--')) el.style.setProperty(prop, val);
+        else el.style[prop] = val;
+      }
+    }
     else if (k in el && typeof v !== 'string') el[k] = v;
     else el.setAttribute(k, v === true ? '' : v);
   }
   for (const kid of kids.flat()) if (kid !== null && kid !== undefined && kid !== false) el.append(kid instanceof Node ? kid : String(kid));
   return el;
 }
+
+/** Gray blocks in the shape of the content that's on its way (instead of a lone spinner). */
+export function skeleton(kind, count = 6) {
+  const shapes = {
+    tiles: () => h('div.skel.skel-tile', { 'aria-hidden': 'true' }, h('i.skel-img'), h('i.skel-line'), h('i.skel-line.short')),
+    rows: () => h('div.skel.skel-row', { 'aria-hidden': 'true' }, h('i.skel-dot'), h('i.skel-line')),
+    apps: () => h('div.skel.skel-app', { 'aria-hidden': 'true' }, h('i.skel-icon'), h('i.skel-line.short')),
+    cards: () => h('div.skel.skel-card', { 'aria-hidden': 'true' }, h('i.skel-line'), h('i.skel-line.short')),
+  };
+  const make = shapes[kind] || shapes.rows;
+  return h('div.skel-group.skel-' + kind, { role: 'status', 'aria-label': 'Loading' }, ...Array.from({ length: count }, make));
+}
+
+/** A keyboard shortcut label, e.g. kbd('Ctrl+K'). */
+export const kbd = keys => h('kbd', {}, keys);
 
 export function fmtBytes(n) {
   if (n == null) return '–';

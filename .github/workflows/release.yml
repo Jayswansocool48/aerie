@@ -1,6 +1,7 @@
 # Builds the Aerie package (.deb for Pop!_OS 24.04) on every push.
-# To release: GitHub → Actions → Release → "Run workflow" (releases the version in
-# aerie/__init__.py), or push a tag that matches it (git tag v1.2.3 && git push origin v1.2.3).
+# To release: change VERSION (and __version__ in aerie/__init__.py to match) and push to main,
+# or GitHub → Actions → Release → "Run workflow", or push a tag that matches VERSION
+# (git tag v1.2.3 && git push origin v1.2.3).
 # A release also:
 #   - attaches the .deb to a GitHub Release
 #   - publishes a signed package source on GitHub Pages, so installed copies get updates
@@ -15,7 +16,7 @@ on:
   workflow_dispatch:
     inputs:
       release:
-        description: Publish a release of the version in aerie/__init__.py
+        description: Publish a release of the version in VERSION
         type: boolean
         default: true
 
@@ -31,24 +32,41 @@ jobs:
       release: ${{ steps.version.outputs.release }}
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 2  # to see whether this push changed VERSION
 
       - name: Work out the version
         id: version
         run: |
-          VERSION=$(python3 -c "import re; print(re.search(r'__version__ = \"(.+?)\"', open('aerie/__init__.py').read())[1])")
+          VERSION=$(tr -d ' \n' < VERSION)
+          CODE=$(python3 -c "import re; print(re.search(r'__version__ = \"(.+?)\"', open('aerie/__init__.py').read())[1])")
+          if [[ "$VERSION" != "$CODE" ]]; then
+            echo "::error::VERSION says $VERSION but aerie/__init__.py says $CODE. Make them match."
+            exit 1
+          fi
           echo "version=$VERSION" >> "$GITHUB_OUTPUT"
           if [[ "$GITHUB_REF" == refs/tags/v* ]]; then
             if [[ "${GITHUB_REF#refs/tags/v}" != "$VERSION" ]]; then
-              echo "::error::Tag ${GITHUB_REF#refs/tags/} doesn't match version $VERSION in aerie/__init__.py. Run 'git pull' before tagging, or use Actions → Release → Run workflow."
+              echo "::error::Tag ${GITHUB_REF#refs/tags/} doesn't match version $VERSION in the code. Run 'git pull' before tagging, or use Actions → Release → Run workflow."
               exit 1
             fi
             echo "release=true" >> "$GITHUB_OUTPUT"
           elif [[ "$GITHUB_EVENT_NAME" == "workflow_dispatch" && "${{ inputs.release }}" == "true" ]]; then
             echo "release=true" >> "$GITHUB_OUTPUT"
+          elif [[ "$GITHUB_EVENT_NAME" == "push" && "$GITHUB_REF" == "refs/heads/main" ]] && git diff --name-only HEAD^ HEAD 2>/dev/null | grep -qx VERSION; then
+            if git ls-remote --exit-code --tags origin "refs/tags/v$VERSION" >/dev/null; then
+              echo "::notice::v$VERSION is already released; not releasing it again."
+            else
+              echo "release=true" >> "$GITHUB_OUTPUT"
+            fi
           fi
 
       - name: Run tests
-        run: python3 tests/test_desktop_watch.py
+        run: |
+          python3 tests/test_desktop_watch.py
+          python3 tests/test_library.py
+          python3 tests/test_replies.py
+          node tests/test_motion.mjs
 
       - name: Install build tools
         run: |

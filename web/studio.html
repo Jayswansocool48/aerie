@@ -18,7 +18,7 @@
       <div><div class="display">Aerie</div><div class="kana">スタジオ</div></div>
     </div>
     <nav id="nav" class="st-nav" aria-label="Pages"></nav>
-    <div class="st-foot small muted" id="foot"></div>
+    <div class="st-foot small muted"><button class="btn small ghost cmd-btn" id="cmd" type="button" aria-keyshortcuts="Control+K"></button><span id="foot"></span></div>
   </aside>
   <main class="st-main" id="main" tabindex="-1">
     <header class="st-head">
@@ -29,11 +29,10 @@
   </main>
   <aside class="st-preview" aria-label="Preview">
     <div class="pv-head"><span class="kana">プレビュー</span><span class="small muted" id="pv-label">Preview</span></div>
-    <div class="pv-frame"><iframe id="preview" title="Live preview of your desktop" tabindex="-1"></iframe></div>
+    <div class="pv-frame" data-sq="14"><iframe id="preview" title="Live preview of your desktop" tabindex="-1"></iframe></div>
     <div id="details" class="pv-details"></div>
   </aside>
-  <div id="drop" class="st-drop" hidden><div><span id="drop-icon"></span><b>Drop to add to your library</b><small>Pictures, videos, Blender .glb scenes, web pages, Wallpaper Engine folders or .zip files</small></div></div>
-  <div class="toast" id="toast" role="status" aria-live="polite" hidden></div>
+  <div id="drop" class="st-drop" hidden><div><span id="drop-icon"></span><b>Drop to add to your library</b><small>Pictures, videos, Blender .glb scenes, web pages, Wallpaper Engine folders or .zip files</small><small>Only add wallpapers you made or have the right to use. They stay on this computer.</small></div></div>
   <script type="module" src="js/studio.js"></script>
 </body>
 </html>

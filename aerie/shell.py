@@ -256,7 +256,8 @@ class AerieApp(Gtk.Application):
             LayerShell.set_layer(win, LayerShell.Layer.OVERLAY)
             for edge in (LayerShell.Edge.TOP, LayerShell.Edge.BOTTOM, LayerShell.Edge.LEFT, LayerShell.Edge.RIGHT):
                 LayerShell.set_anchor(win, edge, True)
-            LayerShell.set_exclusive_zone(win, -1)
+            # exclusive zone 0: COSMIC keeps the hub clear of its panel and dock (safe area)
+            LayerShell.set_exclusive_zone(win, 0)
             LayerShell.set_keyboard_mode(win, LayerShell.KeyboardMode.EXCLUSIVE)
         else:
             win.set_default_size(1100, 720)
@@ -292,7 +293,13 @@ class AerieApp(Gtk.Application):
             return False
         self.hub.open = False
         surfaces.run_js(self.hub.webview, "window.hub && window.hub.closing()")
-        GLib.timeout_add(220, lambda: (not self.hub.open and self.hub.set_visible(False)) or False)
+        # the page says "closed" when its spring comes to rest; hide it anyway if that never comes
+        GLib.timeout_add(900, self.hide_hub)
+        return False
+
+    def hide_hub(self):
+        if self.hub and not self.hub.open:
+            self.hub.set_visible(False)
         return False
 
     def on_hub_message(self, msg):
@@ -300,6 +307,8 @@ class AerieApp(Gtk.Application):
         log(f"hub says: {kind}" + (f" {msg.get('key')}" if kind == "key" else ""))
         if kind == "close":
             self.close_hub()
+        elif kind == "closed":
+            self.hide_hub()
         elif kind == "studio":
             self.close_hub()
             self.open_studio(msg.get("page"))
@@ -406,7 +415,7 @@ class AerieApp(Gtk.Application):
             self.close_hub()
             self.open_studio(extra if isinstance(extra, str) else None)
         elif action in ("front", "back") and self.layered:
-            # "front": above your windows (app drawer or moving widgets) — only the screen that asked
+            # "front": above your windows (app drawer or moving widgets); only the screen that asked
             layer = LayerShell.Layer.TOP if action == "front" else LayerShell.Layer.BOTTOM
             for win in mine:
                 LayerShell.set_layer(win, layer)

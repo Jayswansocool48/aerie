@@ -1,38 +1,11 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" width="128" height="128">
   <title>Aerie</title>
-  <defs>
-    <linearGradient id="sky" x1="0" y1="0" x2="0" y2="1">
-      <stop offset="0" stop-color="#1c1846"/>
-      <stop offset="0.55" stop-color="#5a3d8f"/>
-      <stop offset="1" stop-color="#ff9e6b"/>
-    </linearGradient>
-    <radialGradient id="moon" cx="0.5" cy="0.5" r="0.5">
-      <stop offset="0" stop-color="#fff6e6"/>
-      <stop offset="0.6" stop-color="#ffe2b8"/>
-      <stop offset="1" stop-color="#ffd09a"/>
-    </radialGradient>
-    <radialGradient id="glow" cx="0.5" cy="0.5" r="0.5">
-      <stop offset="0" stop-color="#ffe7c4" stop-opacity="0.55"/>
-      <stop offset="1" stop-color="#ffe7c4" stop-opacity="0"/>
-    </radialGradient>
-    <linearGradient id="far" x1="0" y1="0" x2="0" y2="1">
-      <stop offset="0" stop-color="#8a6bc4"/>
-      <stop offset="1" stop-color="#4e3a86"/>
-    </linearGradient>
-    <linearGradient id="near" x1="0" y1="0" x2="0" y2="1">
-      <stop offset="0" stop-color="#2d2363"/>
-      <stop offset="1" stop-color="#15113a"/>
-    </linearGradient>
-    <clipPath id="tile"><rect x="6" y="6" width="116" height="116" rx="30"/></clipPath>
-  </defs>
-  <g clip-path="url(#tile)">
-    <rect x="6" y="6" width="116" height="116" fill="url(#sky)"/>
-    <circle cx="64" cy="40" r="30" fill="url(#glow)"/>
-    <circle cx="64" cy="40" r="13" fill="url(#moon)"/>
-    <path d="M6 100 L34 70 L48 82 L72 56 L96 80 L108 70 L122 84 L122 122 L6 122 Z" fill="url(#far)" opacity="0.85"/>
-    <path d="M6 122 L6 108 L40 80 L64 58 L88 80 L122 108 L122 122 Z" fill="url(#near)"/>
-    <path d="M64 58 L57 65 L61 64 L64 67 L67 64 L71 65 Z" fill="#f4ecff" opacity="0.9"/>
-    <path d="M45 30 q5 -4 10 0 q5 -4 10 0" fill="none" stroke="#f4ecff" stroke-width="2" stroke-linecap="round" opacity="0.85" transform="translate(16 -4) scale(0.8)"/>
+  <defs><clipPath id="t"><path d="M82.2 4.0L97.3 4.2L103.4 4.7L108.0 5.6L111.7 6.9L114.8 8.6L117.3 10.7L119.4 13.2L121.1 16.3L122.4 20.0L123.3 24.6L123.8 30.7L124.0 45.9L124.0 82.2L123.8 97.3L123.3 103.4L122.4 108.0L121.1 111.7L119.4 114.8L117.3 117.3L114.8 119.4L111.7 121.1L108.0 122.4L103.4 123.3L97.3 123.8L82.2 124.0L45.8 124.0L30.7 123.8L24.6 123.3L20.0 122.4L16.3 121.1L13.2 119.4L10.7 117.3L8.6 114.8L6.9 111.7L5.6 108.0L4.7 103.4L4.2 97.3L4.0 82.2L4.0 45.9L4.2 30.7L4.7 24.6L5.6 20.0L6.9 16.3L8.6 13.2L10.7 10.7L13.2 8.6L16.3 6.9L20.0 5.6L24.6 4.7L30.7 4.2L45.8 4.0Z"/></clipPath></defs>
+  <path d="M82.2 4.0L97.3 4.2L103.4 4.7L108.0 5.6L111.7 6.9L114.8 8.6L117.3 10.7L119.4 13.2L121.1 16.3L122.4 20.0L123.3 24.6L123.8 30.7L124.0 45.9L124.0 82.2L123.8 97.3L123.3 103.4L122.4 108.0L121.1 111.7L119.4 114.8L117.3 117.3L114.8 119.4L111.7 121.1L108.0 122.4L103.4 123.3L97.3 123.8L82.2 124.0L45.8 124.0L30.7 123.8L24.6 123.3L20.0 122.4L16.3 121.1L13.2 119.4L10.7 117.3L8.6 114.8L6.9 111.7L5.6 108.0L4.7 103.4L4.2 97.3L4.0 82.2L4.0 45.9L4.2 30.7L4.7 24.6L5.6 20.0L6.9 16.3L8.6 13.2L10.7 10.7L13.2 8.6L16.3 6.9L20.0 5.6L24.6 4.7L30.7 4.2L45.8 4.0Z" fill="#1b1814"/>
+  <g clip-path="url(#t)">
+    <circle cx="82" cy="44" r="19" fill="#e45a3c"/>
+    <path d="M4 86 L30 62 L46 74 L70 50 L100 78 L124 64 L124 128 L4 128 Z" fill="#6b5232"/>
+    <path d="M4 98 L26 84 L50 96 L78 74 L104 92 L124 84 L124 128 L4 128 Z" fill="#d9a54e"/>
+    <path d="M4 112 C30 104 50 106 70 112 C92 118 108 112 124 106 L124 128 L4 128 Z" fill="#efe6d8"/>
   </g>
-  <rect x="6.5" y="6.5" width="115" height="115" rx="29.5" fill="none" stroke="#ffffff" stroke-opacity="0.18"/>
 </svg>

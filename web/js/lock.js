@@ -3,6 +3,11 @@
 import { api, normalizeConfig, MONITOR } from './config.js';
 import { icon } from './icons.js';
 import { libraryItems } from './library.js';
+import { animate, installCssSprings, SPRINGS } from './motion.js';
+import { installSquircles } from './squircle.js';
+
+installCssSprings();
+installSquircles();
 
 const $ = s => document.querySelector(s);
 const params = new URLSearchParams(location.search);
@@ -26,10 +31,17 @@ function tick() {
   $('#date').textContent = now.toLocaleDateString([], { weekday: 'long', month: 'long', day: 'numeric' });
 }
 
+// after 20 s without input only the clock stays; any key or mouse move brings the rest back
+function rest(on) {
+  if (document.body.classList.contains('resting') === on) return;
+  document.body.classList.toggle('resting', on);
+  animate($('#form'), { opacity: on ? 0 : 1, y: on ? 10 : 0 }, { config: SPRINGS.gentle });
+  animate($('#bar'), { opacity: on ? 0 : 1 }, { config: SPRINGS.gentle });
+}
 function wake() {
-  document.body.classList.remove('resting');
+  rest(false);
   clearTimeout(restTimer);
-  restTimer = setTimeout(() => { if (!$('#password').value) document.body.classList.add('resting'); }, 20000);
+  restTimer = setTimeout(() => { if (!$('#password').value) rest(true); }, 20000);
 }
 
 addEventListener('keydown', e => {
@@ -63,15 +75,17 @@ $('#power').addEventListener('click', () => {
 window.lockScreen = {
   failed(message) {
     const f = $('#form');
-    f.classList.remove('checking', 'wrong');
-    void f.offsetWidth;
+    f.classList.remove('checking');
     f.classList.add('wrong');
+    // the shake: a spring at rest, kicked sideways, rings out by itself
+    animate($('.pw'), { x: 0 }, { config: SPRINGS.bouncy, velocity: { x: 520 } });
     $('#status').textContent = message || 'Wrong password';
     $('#password').focus();
   },
   success() {
     $('#form').classList.remove('checking');
     $('#form').classList.add('ok');
+    animate($('#form'), { scale: 0.94, opacity: 0 }, { config: SPRINGS.snappy });
     $('#status').textContent = '';
     $('#password').value = '';
   },
@@ -103,7 +117,7 @@ async function battery() {
   const s = await api.system();
   const b = $('#battery');
   b.hidden = !(cfg.general.lockScreen.battery && s?.battery);
-  if (!b.hidden) b.textContent = `${s.battery.status === 'Charging' ? '⚡ ' : ''}${s.battery.percent}%`;
+  if (!b.hidden) b.textContent = `${s.battery.percent}%${s.battery.status === 'Charging' ? ', charging' : ''}`;
 }
 
 (async function start() {

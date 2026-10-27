@@ -3,11 +3,14 @@
 // wallpaper behind the lock screen (?mode=lock, no widgets).
 import { api, defaultWidget, MONITOR, normalizeConfig, STANDALONE, wallpaperFor, wallpaperSettings, WIDGET_TYPES } from './config.js';
 import { QuickMenu } from './quickmenu.js';
+import { installCssSprings } from './motion.js';
 import { AppDrawer } from './drawer.js';
 import { SceneView } from './scene.js';
 import { SoundEngine } from './sound.js';
 import { WidgetLayer } from './widgets.js';
 import { itemFor, libraryItems, settingsKey, WallpaperLayer } from './wallpaper.js';
+
+installCssSprings(); // CSS transitions here follow sampled spring curves
 
 const MODE = new URLSearchParams(location.search).get('mode') || 'desktop'; // desktop · preview · lock
 const $ = sel => document.querySelector(sel);
@@ -236,7 +239,7 @@ window.addEventListener('contextmenu', async e => {
   if (w) {
     items.push(
       { label: 'Widget settings…', run: () => api.shell('studio', 'widgets') },
-      { label: 'Hide this widget', run: () => { w.visible = false; changed(); toast('Hidden — show it again in Aerie Studio → Widgets'); } },
+      { label: 'Hide this widget', run: () => { w.visible = false; changed(); toast('Hidden. Show it again in Aerie Studio → Widgets.'); } },
       { label: 'Remove this widget', danger: true, run: () => removeWidget(w) },
       '-',
     );
@@ -289,7 +292,7 @@ function addWidgetAt(type, at) {
   cfg.widgets.push(w);
   changed();
   sound.play('success');
-  toast(`${WIDGET_TYPES[type]} added — hold Alt and drag to move it`);
+  toast(`${WIDGET_TYPES[type]} added. Hold Alt and drag to move it.`);
 }
 
 let lastRemoved = null;
@@ -297,7 +300,7 @@ function removeWidget(w) {
   lastRemoved = { w, index: cfg.widgets.indexOf(w) };
   cfg.widgets = cfg.widgets.filter(x => x !== w);
   changed();
-  toast('Widget removed — press Ctrl+Z to bring it back');
+  toast('Widget removed. Press Ctrl+Z to bring it back.');
 }
 
 let toastTimer;

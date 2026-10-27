@@ -44,6 +44,34 @@ for _ext, _type in ((".opus", "audio/ogg"), (".oga", "audio/ogg"), (".flac", "au
     mimetypes.add_type(_type, _ext)
 CHUNK = 1024 * 1024
 READ_ONLY_POSTS = {"/api/now-playing"}  # all the lock screen may change
+_IDEM_KEY = re.compile(r"^[A-Za-z0-9-]{8,64}$")
+
+
+class Replies:
+    """Remembers the answer to each request sent with an Idempotency-Key for 10 minutes, so a
+    retry or a double click (same key) gets the first answer instead of running twice."""
+
+    TTL = 600
+
+    def __init__(self):
+        self.lock = threading.Lock()
+        self.items = {}  # key -> {"time", "done": Event, "reply": (status, body)}
+
+    def claim(self, key):
+        """(entry, first): first is True when this request should do the work."""
+        now = time.time()
+        with self.lock:
+            for k in [k for k, v in self.items.items() if now - v["time"] > self.TTL]:
+                del self.items[k]
+            entry = self.items.get(key)
+            if entry:
+                return entry, False
+            entry = self.items[key] = {"time": now, "done": threading.Event(), "reply": None}
+            return entry, True
+
+    def forget(self, key):
+        with self.lock:
+            self.items.pop(key, None)
 
 
 class AerieServer:
@@ -58,6 +86,7 @@ class AerieServer:
         self.on_pick = None  # set by the GTK shell: (folder: bool) -> chosen path or None
         self.clipboard_watcher = None  # set by the GTK shell
         self.speed = {"running": False, "stage": "", "result": None, "error": ""}
+        self.replies = Replies()  # answers to requests that carried an Idempotency-Key
         handler = _make_handler(self)
         self.httpd = ThreadingHTTPServer(("127.0.0.1", port), handler)
         self.httpd.daemon_threads = True
@@ -322,6 +351,11 @@ def _make_handler(app):
 
         def _json(self, data, status=200):
             body = json.dumps(data).encode()
+            self.last_reply = (status, body)
+            self._send_json_bytes(status, body)
+            return True  # "handled", so a route helper's `return self._json(…)` stops the dispatch
+
+        def _send_json_bytes(self, status, body):
             self.send_response(status)
             self.send_header("Content-Type", "application/json")
             self.send_header("Content-Length", str(len(body)))
@@ -607,6 +641,34 @@ def _make_handler(app):
         def do_POST(self):
             if not self._guard():
                 return
+            key = self.headers.get("Idempotency-Key", "")
+            if not _IDEM_KEY.match(key):
+                return self._do_post()
+            entry, first = app.replies.claim(key)
+            if not first:
+                # the same request again: wait for the first one, then give its answer
+                self._discard_body()
+                entry["done"].wait(300)
+                status, body = entry["reply"] or (409, b'{"error": "still working on it"}')
+                return self._send_json_bytes(status, body)
+            self.last_reply = None
+            try:
+                self._do_post()
+            finally:
+                entry["reply"] = self.last_reply
+                entry["done"].set()
+                if not self.last_reply or self.last_reply[0] >= 400:
+                    app.replies.forget(key)  # only successes are replayed; a retry after a failure runs again
+
+        def _discard_body(self):
+            length = int(self.headers.get("Content-Length") or 0)
+            while length > 0:
+                chunk = self.rfile.read(min(length, 1 << 20))
+                if not chunk:
+                    break
+                length -= len(chunk)
+
+        def _do_post(self):
             route = urlparse(self.path).path
             if app.read_only and route not in READ_ONLY_POSTS:
                 return self._json({"error": "read only"}, 403)

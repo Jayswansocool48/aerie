@@ -6,11 +6,11 @@ and **animations**, and moves the camera a little with the mouse for depth. The 
 
 ## Export
 
-1. Make your scene. Set up a **camera** (Aerie looks through the first one) — 16:9 is best
+1. Make your scene. Set up a **camera** (Aerie looks through the first one). 16:9 is best
    (Output Properties → Resolution 1920 × 1080). Wider screens see more at the sides;
    narrower ones keep everything left to right.
 2. **File → Export → glTF 2.0 (.glb/.gltf)**, with:
-   - **Format:** glTF Binary (`.glb`) — one file, easiest
+   - **Format:** glTF Binary (`.glb`): one file, the easiest
    - **Include:** ✅ Cameras, ✅ Punctual Lights, ✅ Custom Properties (for the options below)
    - **Data → Mesh:** ✅ Apply Modifiers
    - **Data → Compression:** optional (Draco works and makes files much smaller)
@@ -24,9 +24,9 @@ and **animations**, and moves the camera a little with the mouse for depth. The 
   in the Graph Editor), so the wallpaper never jumps. All animations play at once, on repeat.
 - **Only Principled BSDF materials export** (base color, metallic, roughness, normal map,
   emission, alpha). Shader node tricks, volumetrics, particle systems and geometry nodes
-  that aren't applied won't come across — bake them into textures or meshes first.
+  that aren't applied won't come across. Bake them into textures or meshes first.
 - **Glow:** use Emission on the material. For soft light without many lamps, bake lighting
-  into the textures (Cycles → Bake) — it looks great and is fast.
+  into the textures (Cycles → Bake). It looks good and runs fast.
 - **Background:** glTF has no World/sky. Model a big sky sphere or a backdrop plane with an
   emissive texture, or set `aerie_background` (below).
 - **Keep it light:** a wallpaper runs all the time. Aim for under ~300k triangles and textures
@@ -56,7 +56,7 @@ Put these in `web/scenes/` and commit them:
 ```
 web/scenes/
   summer-shrine.glb     ← the scene
-  summer-shrine.jpg     ← a 16:9 preview picture (1280×720 is plenty) — optional
+  summer-shrine.jpg     ← a 16:9 preview picture (1280×720 is plenty), optional
   summer-shrine.json    ← optional: {"title": "Summer Shrine", "tagline": "A red gate under big clouds", "order": 1}
 ```
 
