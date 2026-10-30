@@ -1,0 +1,15 @@
+{
+  "title": "Dolomites",
+  "tagline": "Snow on the peaks above the larch forest",
+  "order": 4,
+  "type": "image",
+  "entry": "dolomites.jpg",
+  "preview": "preview.jpg",
+  "credit": {
+    "title": "Dolomites",
+    "author": "Benjamin Voros",
+    "license": "CC0",
+    "source": "Pop!_OS wallpapers (Unsplash, published under CC0)",
+    "url": "https://unsplash.com/photos/yrwpJwDNSHE"
+  }
+}

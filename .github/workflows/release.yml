@@ -66,6 +66,7 @@ jobs:
           python3 tests/test_desktop_watch.py
           python3 tests/test_library.py
           python3 tests/test_replies.py
+          python3 tests/test_making.py
           node tests/test_motion.mjs
 
       - name: Install build tools

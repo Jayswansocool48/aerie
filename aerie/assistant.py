@@ -1,10 +1,10 @@
-"""The design assistant: talks to Claude, ChatGPT or a local Ollama model, only about designing
-your desktop.
+"""The AI that makes wallpapers with you: Claude, ChatGPT or a local Ollama model.
 
 Your API keys are kept in ~/.config/aerie/assistant.json (readable only by you) and are only
-ever sent to the service they belong to. The page never sees them. What the assistant gets:
-what you type, plus a short description of your current desktop design (colors, widgets and
-their positions, 3D shapes). Never your notes, to-dos, files or anything else.
+ever sent to the service they belong to. The page never sees them. What the AI gets: what you
+type, the lists of free Poly Haven assets it can choose from, and (when you ask it to change a
+wallpaper it made) that wallpaper's shader code or layout. Never your files, notes or anything else.
+The jobs themselves (finding art, drawing, shaders, 3D stages) are in creator.py.
 """
 
 import json
@@ -19,26 +19,10 @@ SETTINGS_FILE = paths.CONFIG_DIR / "assistant.json"
 PROVIDERS = ("claude", "openai", "ollama")
 DEFAULTS = {
     "provider": "",
-    "models": {"claude": "claude-sonnet-5-5", "openai": "gpt-5-mini", "ollama": ""},
+    "models": {"claude": "claude-sonnet-5-5", "openai": "gpt-5-mini", "ollama": "", "openaiImage": "gpt-image-1"},
     "ollamaUrl": "http://127.0.0.1:11434",
     "keys": {},
 }
-
-SYSTEM = """You are the design assistant inside Aerie, a live 3D desktop app for Pop!_OS COSMIC.
-Your ONLY job is helping the person design their desktop: the 3D scene and background, colors,
-lighting, particles, ground cover, widgets and where they sit, 3D objects, the soundscape, the
-widget style, and (only when they clearly ask) the look of their COSMIC panel and dock.
-If they ask about anything else (general questions, coding, homework, news, other apps, personal
-advice), reply briefly and kindly that you can only help design their desktop, with no changes.
-
-Answer with ONE JSON object and nothing else:
-{"reply": "<1-3 short, friendly sentences about what you did or suggest>", "changes": [ ... ]}
-"changes" may be empty. Only use the operations, paths and values described in the CAPABILITIES
-below; anything else is ignored. Prefer a few tasteful, coherent changes over many. Colors are
-"#rrggbb". Positions x/y are percent of the screen (0-100, top-left of the widget).
-When you change the overall mood, adjust background, light, particles, fog and widget theme together
-so it looks designed, not random."""
-
 
 def _private_write(path, data):
     path.parent.mkdir(parents=True, exist_ok=True)
@@ -72,7 +56,7 @@ def update(changes):
     if changes.get("provider") in PROVIDERS + ("",):
         s["provider"] = changes["provider"]
     for p, model in (changes.get("models") or {}).items():
-        if p in PROVIDERS and isinstance(model, str) and len(model) < 120:
+        if p in PROVIDERS + ("openaiImage",) and isinstance(model, str) and len(model) < 120:
             s["models"][p] = model.strip()
     url = changes.get("ollamaUrl")
     if isinstance(url, str) and re.match(r"^https?://[^\s]+$", url.strip()):
@@ -106,57 +90,94 @@ def ollama_models():
     return [m.get("name") for m in data.get("models", []) if m.get("name")]
 
 
-def chat(messages, context):
-    """messages: [{role: user|assistant, content}] (latest last). context: the desktop and what can change.
-    Returns {"reply": str, "changes": list}."""
+def complete(system, messages, max_tokens=4000, timeout=300):
+    """Asks the chosen AI. messages: [{role: user|assistant, content}] (latest last).
+    Returns the text of its answer (the prompts ask for JSON)."""
     s = load()
     provider = s["provider"]
     if provider not in PROVIDERS:
-        raise ValueError("Pick an AI in the assistant's settings first")
-    system = SYSTEM + "\n\nCAPABILITIES AND CURRENT DESKTOP:\n" + str(context)[:24000]
-    history = [{"role": m["role"], "content": str(m["content"])[:4000]}
+        raise ValueError("Pick an AI in Studio → Create → AI settings first")
+    history = [{"role": m["role"], "content": str(m["content"])[:60000]}
                for m in messages[-12:] if m.get("role") in ("user", "assistant") and m.get("content")]
     if not history or history[-1]["role"] != "user":
         raise ValueError("Nothing to answer")
     model = s["models"].get(provider) or DEFAULTS["models"][provider]
-
     if provider == "claude":
         key = s["keys"].get("claude")
         if not key:
-            raise ValueError("Add your Claude API key in the assistant's settings")
+            raise ValueError("Add your Claude API key in Studio → Create → AI settings")
         data = _post("https://api.anthropic.com/v1/messages",
-                     {"model": model, "max_tokens": 1500, "system": system, "messages": history},
-                     {"x-api-key": key, "anthropic-version": "2023-06-01"})
-        text = "".join(b.get("text", "") for b in data.get("content", []) if b.get("type") == "text")
-    elif provider == "openai":
+                     {"model": model, "max_tokens": max_tokens, "system": system, "messages": history},
+                     {"x-api-key": key, "anthropic-version": "2023-06-01"}, timeout=timeout)
+        return "".join(b.get("text", "") for b in data.get("content", []) if b.get("type") == "text")
+    if provider == "openai":
         key = s["keys"].get("openai")
         if not key:
-            raise ValueError("Add your OpenAI API key in the assistant's settings")
+            raise ValueError("Add your OpenAI API key in Studio → Create → AI settings")
         data = _post("https://api.openai.com/v1/chat/completions",
                      {"model": model, "messages": [{"role": "system", "content": system}] + history,
                       "response_format": {"type": "json_object"}},
-                     {"Authorization": f"Bearer {key}"})
-        text = (data.get("choices") or [{}])[0].get("message", {}).get("content", "")
-    else:
-        if not model:
-            raise ValueError("Pick one of your Ollama models in the assistant's settings")
-        data = _post(s["ollamaUrl"] + "/api/chat",
-                     {"model": model, "stream": False, "format": "json",
-                      "messages": [{"role": "system", "content": system}] + history}, {}, timeout=300)
-        text = data.get("message", {}).get("content", "")
-    return _parse(text)
+                     {"Authorization": f"Bearer {key}"}, timeout=timeout)
+        return (data.get("choices") or [{}])[0].get("message", {}).get("content", "")
+    if not model:
+        raise ValueError("Pick one of your Ollama models in Studio → Create → AI settings")
+    data = _post(s["ollamaUrl"] + "/api/chat",
+                 {"model": model, "stream": False, "format": "json",
+                  "messages": [{"role": "system", "content": system}] + history}, {}, timeout=max(timeout, 600))
+    return data.get("message", {}).get("content", "")
 
 
-def _parse(text):
-    m = re.search(r"\{.*\}", text or "", re.S)
-    if m:
-        try:
-            data = json.loads(m.group(0))
-            changes = data.get("changes") if isinstance(data.get("changes"), list) else []
-            return {"reply": str(data.get("reply") or "Done.")[:1200], "changes": changes[:40]}
-        except ValueError:
-            pass
-    return {"reply": (text or "I couldn't come up with anything, try asking another way.").strip()[:1200], "changes": []}
+def can_paint():
+    """True when an OpenAI key is set, so the image AI can paint pictures."""
+    return bool(load()["keys"].get("openai"))
+
+
+def paint(prompt, size="1536x1024"):
+    """Asks OpenAI's image model for a picture. Returns PNG/JPEG bytes."""
+    import base64
+    s = load()
+    key = s["keys"].get("openai")
+    if not key:
+        raise ValueError("Painting pictures needs an OpenAI API key (Studio → Create → AI settings)")
+    data = _post("https://api.openai.com/v1/images/generations",
+                 {"model": s["models"].get("openaiImage") or "gpt-image-1", "prompt": str(prompt)[:3800],
+                  "size": size, "n": 1},
+                 {"Authorization": f"Bearer {key}"}, timeout=300)
+    first = (data.get("data") or [{}])[0]
+    if first.get("b64_json"):
+        return base64.b64decode(first["b64_json"])
+    raise ValueError("The image AI didn't send a picture back")
+
+
+def parse_json(text):
+    """The first JSON object in an AI answer (they sometimes wrap it in words or code fences)."""
+    text = text or ""
+    for m in re.finditer(r"\{", text):
+        depth, in_str, esc = 0, False, False
+        for i in range(m.start(), len(text)):
+            ch = text[i]
+            if in_str:
+                if esc:
+                    esc = False
+                elif ch == "\\":
+                    esc = True
+                elif ch == '"':
+                    in_str = False
+            elif ch == '"':
+                in_str = True
+            elif ch == "{":
+                depth += 1
+            elif ch == "}":
+                depth -= 1
+                if depth == 0:
+                    try:
+                        data = json.loads(text[m.start():i + 1])
+                        if isinstance(data, dict):
+                            return data
+                    except ValueError:
+                        pass
+                    break
+    raise ValueError("The AI's answer wasn't in the expected form. Try again, or try another model.")
 
 
 def error_message(exc):

@@ -18,10 +18,10 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from urllib.parse import unquote, urlparse
 
-from . import (APP_ID, __version__, account, assistant, clipboard, controls, cosmic_look, library, lockscreen,
-               media_player, package, paths, shortcuts, speedtest, wallpapers)
+from . import (APP_ID, __version__, assistant, audio, cosmic_look, creator, lockscreen, media_player, openverse,
+               package, paths, polyhaven, wallpapers)
 from .app_catalog import AppCatalog
-from .system_info import SystemInfo, top_apps
+from .system_info import SystemInfo
 
 MAX_UPLOAD = 200 * 1024 * 1024
 MEDIA_TYPES = {
@@ -29,7 +29,6 @@ MEDIA_TYPES = {
     ".glb", ".gltf",  # 3D models
     ".mp4", ".webm",  # video wallpapers
     ".hdr",  # 360° HDR skies
-    ".mp3", ".ogg", ".oga", ".opus", ".wav", ".flac", ".m4a",  # your own sounds
 }
 _SAFE_NAME = re.compile(r"^[a-f0-9]{32}\.[a-z0-9]{2,5}$")
 
@@ -38,8 +37,10 @@ mimetypes.add_type("model/gltf+json", ".gltf")
 mimetypes.add_type("text/javascript", ".js")
 mimetypes.add_type("image/webp", ".webp")
 mimetypes.add_type("image/vnd.radiance", ".hdr")
-for _ext, _type in ((".opus", "audio/ogg"), (".oga", "audio/ogg"), (".flac", "audio/flac"), (".m4a", "audio/mp4"),
-                    (".mkv", "video/x-matroska"), (".mov", "video/quicktime"), (".m4v", "video/mp4"),
+mimetypes.add_type("image/svg+xml", ".svg")
+mimetypes.add_type("font/woff", ".woff")
+mimetypes.add_type("text/plain", ".glsl")
+for _ext, _type in ((".mkv", "video/x-matroska"), (".mov", "video/quicktime"), (".m4v", "video/mp4"),
                     (".ogv", "video/ogg"), (".avif", "image/avif"), (".ttf", "font/ttf"), (".wasm", "application/wasm")):
     mimetypes.add_type(_type, _ext)
 CHUNK = 1024 * 1024
@@ -84,8 +85,7 @@ class AerieServer:
         self.on_shell_request = None  # set by the GTK shell: (action, monitor, extra) for quit, hub, reload…
         self.on_snapshot = None  # set by the GTK shell: (monitor, widgets, path) -> path
         self.on_pick = None  # set by the GTK shell: (folder: bool) -> chosen path or None
-        self.clipboard_watcher = None  # set by the GTK shell
-        self.speed = {"running": False, "stage": "", "result": None, "error": ""}
+        self.audio_status = lambda: {"running": False, "problem": ""}  # set by the GTK shell
         self.replies = Replies()  # answers to requests that carried an Idempotency-Key
         handler = _make_handler(self)
         self.httpd = ThreadingHTTPServer(("127.0.0.1", port), handler)
@@ -115,21 +115,6 @@ class AerieServer:
         self.httpd.shutdown()
         self.web.stop()
 
-    def run_speedtest(self):
-        if self.speed["running"]:
-            return
-        self.speed.update(running=True, stage="ping", error="")
-
-        def work():
-            try:
-                self.speed["result"] = speedtest.run(lambda stage: self.speed.update(stage=stage))
-            except Exception as exc:  # offline, blocked…
-                self.speed["error"] = "Couldn't reach the speed test server. Are you online?"
-                self.speed["detail"] = str(exc)[:200]
-            finally:
-                self.speed.update(running=False, stage="")
-        threading.Thread(target=work, daemon=True).start()
-
     # ---- config -------------------------------------------------------
     def read_config(self):
         try:
@@ -143,30 +128,10 @@ class AerieServer:
         tmp.write_text(json.dumps(data, indent=2))
         tmp.replace(paths.CONFIG_FILE)
 
-    def library_allowed(self):
-        cfg = self.read_config() or {}
-        return bool((cfg.get("general") or {}).get("libraryConsent"))
-
-    def set_lockscreen(self, req):
-        """Makes a picture COSMIC's wallpaper, which is what the lock screen shows."""
-        folder = paths.DATA_DIR / "lockscreen"
-        folder.mkdir(parents=True, exist_ok=True)
-        target = folder / f"lockscreen-{uuid.uuid4().hex[:8]}.png"  # a new name so COSMIC reloads it
-        if req.get("source") == "scene":
-            if not self.on_snapshot:
-                raise RuntimeError("Only works in the Aerie app, not in preview mode")
-            monitor = req.get("monitor") if isinstance(req.get("monitor"), int) else 0
-            self.on_snapshot(monitor, bool(req.get("widgets")), target)
-        else:
-            name = str(req.get("url", "")).removeprefix("/media/")
-            if not _SAFE_NAME.match(name) or Path(name).suffix not in (".png", ".jpg", ".jpeg", ".webp"):
-                raise ValueError("Choose a PNG, JPG or WebP picture")
-            target = target.with_suffix(Path(name).suffix)
-            shutil.copyfile(paths.MEDIA_DIR / name, target)
-        for old in folder.iterdir():
-            if old != target:
-                old.unlink(missing_ok=True)
-        return cosmic_look.set_wallpaper(target)
+    def online_allowed(self):
+        """You turned on online content (Openverse and Poly Haven) in Studio."""
+        g = (self.read_config() or {}).get("general") or {}
+        return bool(g.get("online", g.get("libraryConsent")))
 
     def delete_all_data(self):
         cosmic_look.restore()  # put COSMIC's own look back before forgetting how it was
@@ -227,15 +192,27 @@ class AerieServer:
 
 
 def _undo_extras():
-    """Everything Aerie set up outside its own folders: the hub shortcuts, clipboard history
-    and the lock screen choice (the package removal takes the system switch away)."""
-    try:
-        shortcuts.set_installed(False)
-    except (OSError, ValueError):
-        pass
+    """Everything Aerie set up outside its own folders: the lock screen choice (the package
+    removal takes the system switch away), and the hub shortcuts older versions added."""
+    _remove_old_shortcuts()
     lockscreen.FLAG.unlink(missing_ok=True)
     lockscreen.restart_locker()
-    clipboard.clear(keep_pinned=False)
+
+
+def _remove_old_shortcuts():
+    """Aerie 2.x put Super+D and Super+Shift+W for its hub in COSMIC's custom shortcuts."""
+    f = Path(os.environ.get("XDG_CONFIG_HOME", Path.home() / ".config")) / "cosmic" / \
+        "com.system76.CosmicSettings.Shortcuts" / "v1" / "custom"
+    try:
+        text = f.read_text()
+    except OSError:
+        return
+    lines = text.splitlines(keepends=True)
+    kept = [ln for ln in lines if not ("--hub" in ln and "aerie" in ln)]
+    if len(kept) != len(lines):
+        tmp = f.with_name(".custom.aerie-tmp")
+        tmp.write_text("".join(kept))
+        tmp.replace(f)
 
 
 class WebWallpaperServer:
@@ -413,23 +390,6 @@ def _make_handler(app):
             if route.startswith("/wp/"):
                 item_id, _, rel = route[len("/wp/"):].partition("/")
                 f = wallpapers.resolve_file(item_id, unquote(rel))
-                return self._file(f) if f else self._json({"error": "not found"}, 404)
-            if route == "/api/controls":
-                return self._json(controls.status())
-            if route == "/api/stats":
-                snap = app.system.snapshot()
-                snap["apps"] = top_apps()
-                snap["speed"] = {k: v for k, v in app.speed.items() if k != "detail"}
-                return self._json(snap)
-            if route == "/api/clipboard":
-                q = self._query()
-                watcher = app.clipboard_watcher
-                return self._json({"items": clipboard.items(q.get("q", ""), q.get("kind", "all")),
-                                   "available": clipboard.available(),
-                                   "running": bool(watcher and watcher.running),
-                                   "problem": watcher.problem() if watcher else ""})
-            if route.startswith("/clip/"):
-                f = clipboard.file_path(route[len("/clip/"):])
                 return self._file(f, cache=False) if f else self._json({"error": "not found"}, 404)
             if route == "/api/lock/status":
                 return self._json(lockscreen.status())
@@ -445,16 +405,12 @@ def _make_handler(app):
                 from . import userinfo
                 f = userinfo.avatar(pwd.getpwuid(os.getuid()).pw_name)
                 return self._file(f, cache=False) if f else self._json({"error": "none"}, 404)
-            if route == "/api/hub/shortcuts":
-                return self._json({"installed": shortcuts.installed()})
             if route == "/api/apps":
                 return self._json({"apps": app.catalog.list()})
             if route == "/api/system":
                 return self._json(app.system.snapshot())
             if route == "/api/autostart":
                 return self._json({"enabled": paths.AUTOSTART_FILE.exists()})
-            if route == "/api/cosmic-look":
-                return self._json(cosmic_look.read())
             if route == "/api/now-playing":
                 info = media_player.status()
                 info.pop("artPath", None)
@@ -467,40 +423,48 @@ def _make_handler(app):
             if route.startswith("/icon/"):
                 icon = app.catalog.icon_path(unquote(route[len("/icon/"):]))
                 return self._file(icon) if icon else self._json({"error": "no icon"}, 404)
-            if route == "/api/library":
-                if not app.library_allowed():
-                    return self._json({"error": "The online library is turned off in Settings"}, 403)
-                kind = (urlparse(self.path).query.partition("kind=")[2] or "hdris").split("&")[0]
+            if route == "/api/audio":
+                ok, why = audio.available()
+                return self._json({"available": ok, "why": why, **app.audio_status()})
+            # ---- online: Poly Haven (3D) and Openverse (pictures), only after you allowed it
+            if route in ("/api/polyhaven", "/api/openverse") or route.startswith(("/polyhaven-thumb/", "/openverse-thumb/")):
+                if not app.online_allowed():
+                    return self._json({"error": "Online content is off. Turn it on in Studio → Discover."}, 403)
+                q = self._query()
+                if route == "/api/polyhaven":
+                    try:
+                        return self._json({"items": polyhaven.search(q.get("kind", "hdris"), q.get("q", ""), 120)})
+                    except Exception as exc:  # offline, Poly Haven down, …
+                        return self._json({"error": polyhaven.error_message(exc)}, 502)
+                if route == "/api/openverse":
+                    try:
+                        return self._json({"items": openverse.search(q.get("q", ""), int(q.get("page", "1") or 1))})
+                    except Exception as exc:
+                        return self._json({"error": openverse.error_message(exc)}, 502)
                 try:
-                    return self._json({"items": library.browse(kind)})
-                except Exception as exc:  # offline, Poly Haven down, …
-                    return self._json({"error": library.error_message(exc)}, 502)
+                    if route.startswith("/polyhaven-thumb/"):
+                        return self._file(polyhaven.thumbnail(unquote(route[len("/polyhaven-thumb/"):])))
+                    return self._file(openverse.thumbnail(unquote(route[len("/openverse-thumb/"):])))
+                except Exception:
+                    return self._json({"error": "not found"}, 404)
+            if route.startswith("/library/"):
+                f = polyhaven.local_file(unquote(route[len("/library/"):]))
+                return self._file(f) if f else self._json({"error": "not found"}, 404)
+            if route == "/api/polyhaven/local":
+                q = self._query()
+                f = polyhaven.local(q.get("kind", ""), q.get("id", ""), q.get("res", "2k"))
+                url = "/library/" + f.relative_to(polyhaven.LIBRARY_DIR).as_posix() if f else ""
+                return self._json({"url": url, "online": app.online_allowed()})
             if route == "/api/assistant":
-                return self._json(assistant.public())
+                return self._json({**assistant.public(), "canPaint": assistant.can_paint()})
             if route == "/api/assistant/ollama-models":
                 try:
                     return self._json({"models": assistant.ollama_models()})
                 except Exception as exc:
                     return self._json({"models": [], "error": assistant.error_message(exc)})
-            if route == "/api/lockscreen":
-                current = cosmic_look.wallpaper()
-                return self._json({"current": current, "ours": bool(current and str(paths.DATA_DIR) in current)})
-            if route == "/lockscreen-picture":
-                current = cosmic_look.wallpaper()
-                folder = (paths.DATA_DIR / "lockscreen").resolve()
-                if current and Path(current).resolve().parent == folder and Path(current).is_file():
-                    return self._file(current, cache=False)
-                return self._json({"error": "not ours"}, 404)
-            if route.startswith("/library-thumb/"):
-                if not app.library_allowed():
-                    return self._json({"error": "library is off"}, 403)
-                try:
-                    return self._file(library.thumbnail(unquote(route[len("/library-thumb/"):])))
-                except Exception:
-                    return self._json({"error": "not found"}, 404)
-            if route.startswith("/library/"):
-                f = library.local_file(unquote(route[len("/library/"):]))
-                return self._file(f) if f else self._json({"error": "not found"}, 404)
+            if route == "/api/assistant/job":
+                job = creator.status(self._query().get("id", ""))
+                return self._json(job) if job else self._json({"error": "no such job"}, 404)
             if route.startswith("/media/"):
                 name = route[len("/media/"):]
                 if not _SAFE_NAME.match(name):
@@ -540,8 +504,9 @@ def _make_handler(app):
                 shutil.rmtree(tmp_dir, ignore_errors=True)
 
         def _post_more(self, route, body):
-            """The hub, Studio and lock screen routes. Returns None if the route isn't one of them."""
+            """Library, making wallpapers, online content and the lock screen. None if not one of them."""
             req = self._req(body)
+            bad = (wallpapers.ImportError_, ValueError)
             if route == "/api/wallpapers/import":
                 try:
                     return self._json({"item": wallpapers.import_path(str(req.get("path", "")), copy=req.get("copy", True) is not False)})
@@ -569,43 +534,88 @@ def _make_handler(app):
             if route == "/api/wallpapers/unhide":
                 wallpapers.unhide_all()
                 return self._json({"ok": True})
-            if route == "/api/controls":
+            if route == "/api/wallpapers/shader":
                 try:
-                    return self._json(controls.set_control(str(req.get("name", "")), req.get("value")))
-                except (ValueError, TypeError, OSError) as exc:
+                    if req.get("id"):
+                        return self._json({"item": wallpapers.update_shader(str(req["id"]), req.get("code", ""))})
+                    return self._json({"item": wallpapers.create_shader(str(req.get("title") or "My shader"), req.get("code", ""))})
+                except bad as exc:
                     return self._json({"error": str(exc)}, 400)
-            if route == "/api/power":
-                action = str(req.get("action", ""))
-                if action == "lock":
-                    return self._json({"ok": lockscreen.lock_now()})
+            if route == "/api/wallpapers/parallax":
                 try:
-                    return self._json({"ok": controls.power(action)})
+                    return self._json({"item": wallpapers.create_parallax(str(req.get("title") or "My 2D scene"), req.get("spec"))})
+                except bad as exc:
+                    return self._json({"error": str(exc)}, 400)
+            if route == "/api/wallpapers/stage":
+                try:
+                    return self._json({"item": wallpapers.create_stage(str(req.get("title") or "My 3D scene"), req.get("spec"))})
+                except bad as exc:
+                    return self._json({"error": str(exc)}, 400)
+            if route == "/api/wallpapers/spec":
+                try:
+                    spec = req.get("spec") if isinstance(req.get("spec"), dict) else {}
+                    item = wallpapers.get(str(req.get("id", "")))
+                    if item and item["type"] == "stage" and app.online_allowed():
+                        clean = wallpapers.clean_stage(spec)
+                        if clean["sky"]["hdri"]:
+                            polyhaven.fetch("hdris", clean["sky"]["hdri"], clean["sky"]["res"])
+                        for m in clean["models"]:
+                            polyhaven.fetch("models", m["asset"], m["res"])
+                    return self._json({"item": wallpapers.save_spec(str(req.get("id", "")), spec)})
+                except bad as exc:
+                    return self._json({"error": str(exc)}, 400)
+                except Exception as exc:  # a download failed
+                    return self._json({"error": polyhaven.error_message(exc)}, 502)
+            if route == "/api/openverse/import":
+                if not app.online_allowed():
+                    return self._json({"error": "Online content is off. Turn it on in Studio → Discover."}, 403)
+                try:
+                    return self._json({"item": openverse.import_image(str(req.get("id", "")))})
+                except bad as exc:
+                    return self._json({"error": str(exc)}, 400)
+                except Exception as exc:
+                    return self._json({"error": openverse.error_message(exc)}, 502)
+            if route == "/api/polyhaven/sky":
+                # a 360° sky on its own is a wallpaper too: a stage with no models
+                if not app.online_allowed():
+                    return self._json({"error": "Online content is off. Turn it on in Studio → Discover."}, 403)
+                try:
+                    asset = polyhaven.find("hdris", str(req.get("id", "")))
+                    if not asset:
+                        return self._json({"error": "Poly Haven doesn't have that sky"}, 404)
+                    polyhaven.fetch("hdris", asset["id"], "2k")
+                    spec = {"sky": {"hdri": asset["id"], "res": "2k"}, "ground": {"show": False},
+                            "camera": {"auto": False, "position": [0, 1.6, 0.01], "target": [0, 1.6, 0], "orbit": 0.02, "fov": 60}}
+                    return self._json({"item": wallpapers.create_stage(asset["name"], spec, source="polyhaven", credit={
+                        "title": asset["name"], "author": ", ".join(asset["authors"]), "license": "CC0",
+                        "source": "Poly Haven", "url": f"https://polyhaven.com/a/{asset['id']}"})})
+                except bad as exc:
+                    return self._json({"error": str(exc)}, 400)
+                except Exception as exc:
+                    return self._json({"error": polyhaven.error_message(exc)}, 502)
+            if route == "/api/polyhaven/fetch":
+                if not app.online_allowed():
+                    return self._json({"error": "Online content is off. Turn it on in Studio → Discover."}, 403)
+                try:
+                    kind = "hdris" if req.get("kind") == "hdris" else "models"
+                    return self._json({"url": polyhaven.fetch(kind, str(req.get("id", "")), str(req.get("res", "1k")))})
+                except Exception as exc:
+                    return self._json({"error": polyhaven.error_message(exc)}, 502)
+            if route == "/api/assistant/settings":
+                try:
+                    return self._json(assistant.update(req))
+                except (ValueError, OSError) as exc:
+                    return self._json({"error": str(exc)}, 400)
+            if route == "/api/assistant/create":
+                needs_online = req.get("mode") in ("find", "3d") or (req.get("mode") in ("auto", None) and not req.get("revise"))
+                if needs_online and not app.online_allowed():
+                    return self._json({"error": "Finding art and building 3D scenes needs online content. "
+                                                "Turn it on in Studio → Discover."}, 403)
+                try:
+                    return self._json({"job": creator.start(req.get("prompt", ""), str(req.get("mode") or "auto"),
+                                                            req.get("revise") if isinstance(req.get("revise"), dict) else None)})
                 except ValueError as exc:
                     return self._json({"error": str(exc)}, 400)
-            if route == "/api/speedtest":
-                app.run_speedtest()
-                return self._json({"ok": True})
-            if route == "/api/clipboard":
-                action, item = req.get("action"), str(req.get("id", ""))
-                if action == "copy":
-                    return self._json({"ok": clipboard.copy(item)})
-                if action == "pin":
-                    clipboard.pin(item, req.get("on", True))
-                elif action == "delete":
-                    clipboard.delete(item)
-                elif action == "clear":
-                    clipboard.clear(keep_pinned=not req.get("all"))
-                elif action == "enable":
-                    if app.clipboard_watcher:
-                        app.clipboard_watcher.set_enabled(bool(req.get("on")))
-                else:
-                    return self._json({"error": "unknown action"}, 400)
-                return self._json({"ok": True})
-            if route == "/api/system/clipboard-access":
-                if not package.INSTALLED:
-                    return self._json({"ok": False, "message": "Install Aerie first."})
-                ok, _ = package.run(["pkexec", str(lockscreen.HELPER), "clipboard-on" if req.get("on") else "clipboard-off"], timeout=300)
-                return self._json({"ok": ok, "message": "Done. Log out and back in to finish." if ok else "Cancelled."})
             if route == "/api/lock/enable":
                 ok, message = lockscreen.set_enabled(bool(req.get("on")))
                 return self._json({"ok": ok, "message": message, "status": lockscreen.status()})
@@ -614,12 +624,24 @@ def _make_handler(app):
                 return self._json({"ok": ok, "message": message, "status": lockscreen.status()})
             if route == "/api/lock/preview":
                 return self._json({"ok": lockscreen.preview()})
-            if route == "/api/hub/shortcuts":
-                try:
-                    return self._json({"installed": shortcuts.set_installed(bool(req.get("on")))})
-                except (OSError, ValueError) as exc:
-                    return self._json({"error": str(exc)}, 400)
+            if route == "/api/lock/now":
+                return self._json({"ok": lockscreen.lock_now()})
+            if route == "/api/cache/clear":
+                wallpapers.clear_cache()
+                openverse.clear_cache()
+                return self._json({"ok": True})
             return None
+
+        def _raw_into(self, item_id, fn):
+            """Routes that take a file as the request body (a layer picture, a preview)."""
+            try:
+                body = self._body()
+            except ValueError:
+                return self._json({"error": "That file is too big."}, 413)
+            try:
+                return self._json(fn(item_id, body))
+            except wallpapers.ImportError_ as exc:
+                return self._json({"error": str(exc)}, 400)
 
         def do_HEAD(self):
             self.do_GET()
@@ -674,6 +696,13 @@ def _make_handler(app):
                 return self._json({"error": "read only"}, 403)
             if route == "/api/wallpapers/upload":
                 return self._upload_wallpaper()
+            if route == "/api/wallpapers/layer":
+                name = Path(unquote(self.headers.get("X-Filename", "layer.png"))).name
+                return self._raw_into(self._query().get("id", ""),
+                                      lambda i, b: {"file": wallpapers.add_layer(i, name, b)})
+            if route == "/api/wallpapers/preview":
+                return self._raw_into(self._query().get("id", ""),
+                                      lambda i, b: {"item": wallpapers.set_preview(i, b)})
             try:
                 body = self._body()
             except ValueError:
@@ -711,14 +740,6 @@ def _make_handler(app):
                 if ok and app.on_shell_request:
                     app.on_shell_request("quit-later", None, None)
                 return self._json({"ok": ok, "message": message})
-            if route == "/api/cosmic-look":
-                try:
-                    changes = json.loads(body or b"{}")
-                    return self._json({"ok": True, "look": cosmic_look.apply(changes)})
-                except (ValueError, TypeError, OSError, RuntimeError) as exc:
-                    return self._json({"ok": False, "error": str(exc)}, 400)
-            if route == "/api/cosmic-look/restore":
-                return self._json({"ok": cosmic_look.restore(), "look": cosmic_look.read()})
             if route == "/api/now-playing":
                 action = json.loads(body or b"{}").get("action", "")
                 return self._json({"ok": media_player.control(action)})
@@ -733,53 +754,6 @@ def _make_handler(app):
                 app.on_shell_request(req.get("action", ""), monitor if isinstance(monitor, int) else None,
                                      req.get("extra") if isinstance(req.get("extra"), (str, dict)) else None)
                 return self._json({"ok": True})
-            if route == "/api/library/fetch":
-                if not app.library_allowed():
-                    return self._json({"error": "The online library is turned off in Settings"}, 403)
-                req = json.loads(body or b"{}")
-                try:
-                    return self._json({"url": library.fetch(req.get("kind", ""), req.get("id", ""), req.get("resolution", "2k"))})
-                except Exception as exc:
-                    return self._json({"error": library.error_message(exc)}, 502)
-            if route == "/api/assistant/settings":
-                try:
-                    return self._json(assistant.update(json.loads(body or b"{}")))
-                except (ValueError, OSError) as exc:
-                    return self._json({"error": str(exc)}, 400)
-            if route == "/api/assistant/chat":
-                req = json.loads(body or b"{}")
-                try:
-                    return self._json(assistant.chat(req.get("messages") or [], req.get("context") or ""))
-                except Exception as exc:  # offline, bad key, model missing…
-                    return self._json({"error": assistant.error_message(exc)}, 502)
-            if route == "/api/avatar":
-                name = str(json.loads(body or b"{}").get("url", "")).removeprefix("/media/")
-                if not _SAFE_NAME.match(name) or Path(name).suffix not in (".png", ".jpg", ".jpeg", ".webp"):
-                    return self._json({"ok": False, "error": "Choose a PNG, JPG or WebP picture"}, 400)
-                try:
-                    account.set_avatar(paths.MEDIA_DIR / name)
-                    return self._json({"ok": True})
-                except (RuntimeError, OSError, subprocess.SubprocessError) as exc:
-                    return self._json({"ok": False, "error": str(exc)}, 400)
-            if route == "/api/lock-now":
-                return self._json({"ok": account.lock_now()})
-            if route == "/api/thumbnail":
-                # a small picture of the desktop as it looks now (for looks you save)
-                if not app.on_snapshot:
-                    return self._json({"error": "Only works in the Aerie app"}, 400)
-                req = json.loads(body or b"{}")
-                name = uuid.uuid4().hex + ".png"
-                try:
-                    monitor = req.get("monitor") if isinstance(req.get("monitor"), int) else 0
-                    app.on_snapshot(monitor, True, paths.MEDIA_DIR / name, width=480)
-                except (RuntimeError, OSError) as exc:
-                    return self._json({"error": str(exc)}, 500)
-                return self._json({"url": "/media/" + name})
-            if route == "/api/lockscreen":
-                try:
-                    return self._json({"ok": True, "current": app.set_lockscreen(json.loads(body or b"{}"))})
-                except (ValueError, RuntimeError, OSError) as exc:
-                    return self._json({"ok": False, "error": str(exc)}, 400)
             self._json({"error": "not found"}, 404)
 
     return Handler

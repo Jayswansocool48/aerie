@@ -1,42 +1,42 @@
 /* The lock screen: your wallpaper, a big clock and a password box. lock.js moves the parts on
    springs (the wrong-password shake is a real spring kicked sideways). */
-html, body.lock { height: 100%; overflow: hidden; background: #000; }
+html, body.lock { height: 100%; overflow: hidden; background: #030b0b; }
 #wall { position: fixed; inset: 0; width: 100%; height: 100%; border: 0; pointer-events: none; }
 body.lock.web-wallpaper { background: transparent; }
 body.lock.web-wallpaper #wall { display: none; }
-.shade { position: fixed; inset: 0; background: rgba(10, 8, 6, var(--dim, .25)); pointer-events: none; }
-.preview-tag { position: fixed; top: 16px; left: 50%; translate: -50% 0; z-index: 10; padding: 8px 14px; border-radius: var(--r-btn); background: var(--ochre);
-  color: #1b1208; font-weight: 600; font-size: 13px; }
+.shade { position: fixed; inset: 0; background: rgba(2, 8, 8, var(--dim, .25)); pointer-events: none; }
+.preview-tag { position: fixed; top: 16px; left: 50%; translate: -50% 0; z-index: 10; padding: 8px 14px; border-radius: var(--r-btn); background: var(--primary);
+  color: var(--primary-foreground); font-weight: 600; font-size: 13px; }
 .lockui { position: fixed; inset: 0; display: grid; grid-template-rows: 1fr auto; justify-items: center;
-  padding: max(12vh, env(safe-area-inset-top)) 24px max(14vh, env(safe-area-inset-bottom)); color: #fff7ef; text-shadow: 0 1px 12px rgba(0, 0, 0, .5); }
+  padding: max(12vh, env(safe-area-inset-top)) 24px max(14vh, env(safe-area-inset-bottom)); color: #eef6f6; text-shadow: 0 1px 12px rgba(0, 0, 0, .5); }
 .when { text-align: center; align-self: start; }
-.time { font-size: clamp(72px, 11vw, 150px); line-height: 1; letter-spacing: .02em; font-variant-numeric: tabular-nums; }
+.time { font-weight: 300; font-size: clamp(72px, 11vw, 150px); line-height: 1; letter-spacing: .02em; font-variant-numeric: tabular-nums; }
 .date { margin-top: 10px; font-size: clamp(18px, 1.8vw, 24px); font-weight: 500; opacity: .92; }
 .message { margin-top: 18px; font-size: 17px; opacity: .9; max-width: 60ch; text-wrap: balance; }
 .who { display: flex; flex-direction: column; align-items: center; gap: 12px; width: min(340px, 90vw); }
-.avatar { width: 88px; height: 88px; border-radius: 50%; background: var(--surface-3) center / cover; border: 3px solid #fff7ef;
-  display: grid; place-items: center; font-size: 36px; font-weight: 700; color: var(--ochre); text-shadow: none; }
+.avatar { width: 88px; height: 88px; border-radius: 50%; background: var(--surface-3) center / cover; border: 3px solid #eef6f6;
+  display: grid; place-items: center; font-size: 36px; font-weight: 700; color: var(--primary); text-shadow: none; }
 .name { font-size: 20px; font-weight: 600; }
-.pw { position: relative; width: 100%; height: 50px; background: rgba(18, 15, 12, .84); border-radius: 14px; border: 1px solid rgba(255, 247, 239, .26); }
+.pw { position: relative; width: 100%; height: 50px; background: rgba(6, 20, 21, .84); border-radius: 14px; border: 1px solid rgba(238, 246, 246, .26); }
 .squircles .pw[data-sq] { border-color: transparent; }
 .squircles .pw[data-sq]:not(:focus-within)::after { background-image: none; box-shadow: none; }
-.pw input { width: 100%; height: 100%; padding: 0 56px 0 20px; border: 0; background: transparent; color: #fff7ef; font-size: 16px; letter-spacing: .12em; outline: none; }
-.pw input::placeholder { color: rgba(255, 247, 239, .72); letter-spacing: 0; }
+.pw input { width: 100%; height: 100%; padding: 0 56px 0 20px; border: 0; background: transparent; color: #eef6f6; font-size: 16px; letter-spacing: .12em; outline: none; }
+.pw input::placeholder { color: rgba(238, 246, 246, .72); letter-spacing: 0; }
 .pw:not(.sq):focus-within { outline: 2px solid var(--focus); outline-offset: 2px; }
-.pw .go { position: absolute; right: 6px; top: 6px; width: 38px; height: 38px; border-radius: 10px; border: 0; background: var(--accent); color: var(--on-accent); display: grid; place-items: center; }
+.pw .go { position: absolute; right: 6px; top: 6px; width: 38px; height: 38px; border-radius: 10px; border: 0; background: var(--primary); color: var(--primary-foreground); display: grid; place-items: center; }
 .pw .go svg { width: 20px; height: 20px; }
 .status { min-height: 22px; font-size: 14px; font-weight: 500; text-align: center; }
-.who.wrong .status { color: #ffd6cc; }
+.who.wrong .status { color: #ffd0d0; }
 .who.checking .pw input { opacity: .7; }
 .lockbar { position: fixed; left: 0; right: 0; bottom: 0; display: flex; align-items: flex-end; justify-content: space-between; gap: 12px;
-  padding: 18px max(26px, env(safe-area-inset-right)) max(22px, env(safe-area-inset-bottom)) max(26px, env(safe-area-inset-left)); color: #fff7ef; }
+  padding: 18px max(26px, env(safe-area-inset-right)) max(22px, env(safe-area-inset-bottom)) max(26px, env(safe-area-inset-left)); color: #eef6f6; }
 .lockbar .right { display: flex; gap: 8px; align-items: center; margin-left: auto; }
-.lockbar .icon-btn { background: rgba(18, 15, 12, .8); border-color: rgba(255, 247, 239, .2); color: #fff7ef; }
-.battery { font-size: 13px; font-weight: 600; padding: 6px 10px; border-radius: var(--r-btn); background: rgba(18, 15, 12, .8); font-variant-numeric: tabular-nums; }
-.np { display: flex; align-items: center; gap: 12px; padding: 8px 14px 8px 8px; border-radius: 14px; background: rgba(18, 15, 12, .84);
-  border: 1px solid rgba(255, 247, 239, .14); max-width: min(420px, 60vw); }
+.lockbar .icon-btn { background: rgba(6, 20, 21, .8); border-color: rgba(238, 246, 246, .2); color: #eef6f6; }
+.battery { font-size: 13px; font-weight: 600; padding: 6px 10px; border-radius: var(--r-btn); background: rgba(6, 20, 21, .8); font-variant-numeric: tabular-nums; }
+.np { display: flex; align-items: center; gap: 12px; padding: 8px 14px 8px 8px; border-radius: 14px; background: rgba(6, 20, 21, .84);
+  border: 1px solid rgba(238, 246, 246, .14); max-width: min(420px, 60vw); }
 .squircles .np[data-sq] { border-color: transparent; }
-.np img, .np .art { width: 46px; height: 46px; border-radius: 8px; object-fit: cover; flex: none; background: var(--accent-soft); }
+.np img, .np .art { width: 46px; height: 46px; border-radius: 8px; object-fit: cover; flex: none; background: var(--secondary); }
 .np .t { min-width: 0; }
 .np b, .np small { display: block; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .np small { opacity: .75; }

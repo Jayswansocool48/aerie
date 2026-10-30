@@ -171,38 +171,3 @@ def _cpu_temp():
         if best is not None and name != "acpitz":
             break
     return best
-
-
-def top_apps(limit=6):
-    """The programs using the most memory, grouped by name."""
-    totals = {}
-    for proc in Path("/proc").iterdir():
-        if not proc.name.isdigit():
-            continue
-        try:
-            status = (proc / "status").read_text()
-        except OSError:
-            continue
-        name = rss = None
-        for line in status.splitlines():
-            if line.startswith("Name:"):
-                name = line.split(":", 1)[1].strip()
-            elif line.startswith("VmRSS:"):
-                rss = int(line.split()[1]) * 1024
-                break
-        if name and rss:
-            key = _APP_NAMES.get(name, name)
-            totals[key] = totals.get(key, 0) + rss
-    ranked = sorted(totals.items(), key=lambda kv: kv[1], reverse=True)[:limit]
-    return [{"name": n, "memory": m} for n, m in ranked]
-
-
-# Process names that don't look like the app's name
-_APP_NAMES = {
-    "firefox-bin": "Firefox", "firefox": "Firefox", "Isolated Web Co": "Firefox", "Web Content": "Firefox",
-    "chrome": "Google Chrome", "chromium": "Chromium", "brave": "Brave", "code": "Visual Studio Code",
-    "steam": "Steam", "steamwebhelper": "Steam", "Discord": "Discord", "spotify": "Spotify",
-    "cosmic-comp": "COSMIC desktop", "cosmic-panel": "COSMIC panel", "cosmic-files": "Files",
-    "cosmic-term": "Terminal", "cosmic-edit": "Text Editor", "WebKitWebProces": "Aerie (web)",
-    "python3": "Python", "godot": "Godot", "blender": "Blender", "obs": "OBS Studio",
-}

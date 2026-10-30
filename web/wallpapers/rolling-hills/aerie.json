@@ -1,0 +1,13 @@
+{
+ "title": "Rolling Hills",
+ "tagline": "Clouds drifting over green hills, in layers that follow your mouse",
+ "order": 2,
+ "preview": "preview.jpg",
+ "credit": {
+  "title": "Background Elements Redux",
+  "author": "Kenney (kenney.nl), arranged and recolored for Aerie",
+  "license": "CC0",
+  "source": "Kenney",
+  "url": "https://kenney.nl/assets/background-elements-redux"
+ }
+}

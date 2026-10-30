@@ -1,0 +1,13 @@
+{
+  "title": "Anime Sky",
+  "tagline": "Big soft clouds drifting past the sun",
+  "order": 1,
+  "preview": "preview.jpg",
+  "credit": {
+    "title": "Anime Style Sky Shader",
+    "author": "ProfesorShader (ported to Shadertoy GLSL for Aerie)",
+    "license": "CC0",
+    "source": "Godot Shaders",
+    "url": "https://godotshaders.com/shader/anime-style-sky-shader/"
+  }
+}

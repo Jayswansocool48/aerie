@@ -1,8 +1,7 @@
 # Making Aerie scenes in Blender
 
 Aerie plays 3D scenes from Blender as live wallpapers: it uses your scene's **camera**, **lights**
-and **animations**, and moves the camera a little with the mouse for depth. The scenes in
-`web/scenes/` are Aerie's default themes.
+and **animations**, and moves the camera a little with the mouse for depth. 
 
 ## Export
 
@@ -49,20 +48,20 @@ Add these on the **Scene** (Scene Properties → Custom Properties → New) and 
 People using your scene can also change mouse depth, animation speed, brightness, shadows
 and background in Aerie Studio → This wallpaper.
 
-## Adding a scene to Aerie's defaults
+## Adding a scene to the wallpapers that come with Aerie
 
-Put these in `web/scenes/` and commit them:
+Put these in `web/wallpapers/` and commit them:
 
 ```
-web/scenes/
-  summer-shrine.glb     ← the scene
-  summer-shrine.jpg     ← a 16:9 preview picture (1280×720 is plenty), optional
-  summer-shrine.json    ← optional: {"title": "Summer Shrine", "tagline": "A red gate under big clouds", "order": 1}
+web/wallpapers/
+  summer-shrine.glb     the scene
+  summer-shrine.jpg     a 16:9 preview picture (1280×720 is plenty), optional
+  summer-shrine.json    optional: {"title": "Summer Shrine", "tagline": "A red gate under big clouds", "order": 5,
+                        "credit": {"author": "You", "license": "CC0"}}
 ```
 
-The first one (lowest `order`, then by title) is the wallpaper a new install starts with.
-Without any default scenes, Aerie starts with its built-in 3D look.
+The wallpaper with the lowest `order` is the one a new install starts with.
 
 **Licensing:** only add scenes you made yourself, or models and textures whose license lets
-you share them (for example CC0 from Poly Haven or ambientCG). Note the source and license in
-the `.json` file (`"credits": "…"`) and in `README.md`'s credits.
+you share them (for example CC0 from Poly Haven or ambientCG). Fill in `credit` and add a row
+to `web/wallpapers/README.md`.

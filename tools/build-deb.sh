@@ -60,7 +60,8 @@ install -m 644 "$SRC/data/$APP_ID.svg" "$PKG/usr/share/icons/hicolor/scalable/ap
 install -m 644 "$SRC/LICENSE" "$SRC/PRIVACY.md" "$SRC/TERMS.md" "$PKG/usr/share/doc/aerie/"
 install -m 644 "$SRC/web/vendor/THREE-LICENSE" "$PKG/usr/share/doc/aerie/"
 install -m 644 "$SRC/tools/GTK4-LAYER-SHELL-LICENSE" "$PKG/usr/share/doc/aerie/"
-install -m 644 "$SRC/web/fonts/Outfit-OFL.txt" "$SRC/web/fonts/DelaGothicOne-OFL.txt" "$SRC/web/vendor/DRACO-LICENSE" "$PKG/usr/share/doc/aerie/"
+install -m 644 "$SRC/web/fonts/Outfit-OFL.txt" "$SRC/web/fonts/JetBrainsMono-OFL.txt" "$SRC/web/vendor/DRACO-LICENSE" \
+  "$SRC/web/vendor/PHOSPHOR-LICENSE" "$SRC/web/wallpapers/README.md" "$PKG/usr/share/doc/aerie/"
 
 # COSMIC Store listing: the store reads app catalogs from /usr/share/swcatalog and matches
 # them to installed packages by <pkgname>, so Aerie shows up there once installed.
@@ -76,19 +77,20 @@ Section: x11
 Priority: optional
 Architecture: $ARCH
 Installed-Size: $SIZE
-Depends: python3 (>= 3.10), python3-gi, gir1.2-gtk-4.0, gir1.2-webkit-6.0, libgtk-4-1, libwayland-client0, libglib2.0-bin, libpam0g, policykit-1 | pkexec
-Recommends: wl-clipboard, gstreamer1.0-libav, gstreamer1.0-plugins-good, gstreamer1.0-plugins-bad
+Depends: python3 (>= 3.10), python3-gi, python3-numpy, gir1.2-gtk-4.0, gir1.2-webkit-6.0, libgtk-4-1, libwayland-client0, libglib2.0-bin, libpam0g, policykit-1 | pkexec
+Recommends: pulseaudio-utils | pipewire-bin, gstreamer1.0-libav, gstreamer1.0-plugins-good, gstreamer1.0-plugins-bad
 Conflicts: deskscape
 Replaces: deskscape
 Provides: deskscape
 Maintainer: Jayswansocool48 <Jayswansocool48@users.noreply.github.com>
 Homepage: https://github.com/Jayswansocool48/aerie
 Description: Live wallpapers for Pop!_OS COSMIC, like Wallpaper Engine
- Aerie plays live wallpapers on the COSMIC desktop and lock screen: 3D scenes
- made in Blender, videos, pictures, web pages and Wallpaper Engine wallpapers
- (from the Steam Workshop or a folder). A hub drops down from the top of the
- screen with quick controls, stats, clipboard history, apps and wallpapers, and
- Aerie Studio holds your library and every setting. Formerly Deskscape.
+ Aerie plays live wallpapers on the COSMIC desktop and lock screen: pictures
+ and GIFs, videos, 2D parallax scenes, 3D scenes from Blender or Poly Haven,
+ Shadertoy shaders, web pages, and Wallpaper Engine and Lively wallpapers (from
+ the Steam Workshop or a folder). Shaders, web and 2D wallpapers can react to
+ the music you play. Aerie Studio holds your library, finds free CC0 art, and
+ lets an AI you choose make wallpapers with you. Formerly Deskscape.
 EOF
 
 # Before removal: put COSMIC's own lock screen back if Aerie's switch is on.
@@ -97,6 +99,7 @@ cat > "$PKG/DEBIAN/prerm" <<'EOF'
 set -e
 if [ "$1" = "remove" ] || [ "$1" = "purge" ]; then
   /usr/lib/aerie/bin/aerie-system lockscreen-off >/dev/null 2>&1 || true
+  /usr/lib/aerie/bin/aerie-system clipboard-off >/dev/null 2>&1 || true
 fi
 EOF
 # When the package is purged, also remove the update source it added.

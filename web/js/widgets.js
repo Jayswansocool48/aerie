@@ -128,7 +128,7 @@ export class WidgetLayer {
   // ---- rendering ------------------------------------------------------
   renderWidget(node, w) {
     if (!node) return;
-    const style = !w.card ? 'clear' : (w.cardStyle || this.cfg.theme.cardStyle || 'frosted');
+    const style = !w.card ? 'clear' : (w.cardStyle || this.cfg.theme.cardStyle || 'solid');
     const entering = node.classList.contains('entering');
     node.className = `widget widget-${w.type} card-${style}` + (this.selectedId === w.id ? ' selected' : '') + (entering ? ' entering' : '');
     node.hidden = w.visible === false;

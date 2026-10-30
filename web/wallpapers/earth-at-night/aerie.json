@@ -1,0 +1,15 @@
+{
+  "title": "Earth at Night",
+  "tagline": "City lights seen from orbit",
+  "order": 3,
+  "type": "image",
+  "entry": "earth-at-night.jpg",
+  "preview": "preview.jpg",
+  "credit": {
+    "title": "Earth at night from the International Space Station",
+    "author": "NASA",
+    "license": "Public domain",
+    "source": "Pop!_OS wallpapers (Unsplash, nasa-53884)",
+    "url": "https://unsplash.com/photos/Q1p7bh3SHj8"
+  }
+}

@@ -9,9 +9,8 @@ change anything else:
                       working) and a small switch takes its name. People who haven't turned
                       on the Aerie lock screen, and the login screen, still get COSMIC's own.
   lockscreen-off      Put COSMIC's lock screen back exactly as it was.
-  clipboard-on/off    For older COSMIC versions: let apps read the clipboard (needed for
-                      clipboard history). Adds/removes COSMIC_DATA_CONTROL_ENABLED=1 in
-                      /etc/environment. Takes effect after logging out and in.
+  clipboard-off       Undo a setting Aerie 2.x could add for its clipboard history
+                      (COSMIC_DATA_CONTROL_ENABLED=1 in /etc/environment). Run on removal.
   status              Prints what is on.
 """
 
@@ -81,13 +80,12 @@ def clipboard(on):
 def status():
     env = ENVIRONMENT.read_text() if ENVIRONMENT.exists() else ""
     print(f"lockscreen={'on' if diverted() else 'off'}")
-    print(f"clipboard={'on' if ENV_LINE in env.splitlines() else 'off'}")
+    print(f"clipboard={'on' if ENV_LINE in env.splitlines() else 'off'} (Aerie 2.x setting)")
 
 
 ACTIONS = {
     "lockscreen-on": lockscreen_on,
     "lockscreen-off": lockscreen_off,
-    "clipboard-on": lambda: clipboard(True),
     "clipboard-off": lambda: clipboard(False),
     "status": status,
 }

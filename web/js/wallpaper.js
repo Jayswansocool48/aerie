@@ -1,100 +1,112 @@
-// Shows the chosen wallpaper behind the widgets: a Blender 3D scene (.glb), a picture, a video,
-// a Wallpaper Engine scene (its picture layers, with mouse parallax), or nothing at all for web
-// wallpapers (those run in their own sandboxed view underneath this page). Aerie's own editable
-// 3D look is drawn by scene.js; this only says when to show it.
-import { api } from './config.js';
+// Shows the chosen wallpaper behind the widgets. Pictures and videos are plain elements; 3D models
+// (Blender .glb), shaders, 2D parallax, Wallpaper Engine scenes and 3D stages have their own
+// players. Web wallpapers and web sites run in their own sandboxed view underneath this page
+// (the Aerie app puts it there), so for those this layer stays see-through.
+import { api, itemFor } from './config.js';
 import { libraryItems } from './library.js';
 import { ModelScene } from './modelscene.js';
+import { ParallaxView } from './parallax.js';
+import { ShaderView } from './shaderview.js';
+import { StageView } from './stage.js';
 
 export { forgetLibrary, libraryItems } from './library.js';
+export { itemFor };
 
-/** The library item a choice points to ('default' = the first scene that comes with Aerie). */
-export function itemFor(choice, items) {
-  if (choice?.type === 'default') return items.find(i => i.source === 'default') || null;
-  if (choice?.type === 'library') return items.find(i => i.id === choice.id) || null;
-  return null;
-}
-
-/** What kind of wallpaper a choice is: 'scene' (the editable 3D look), 'model' (Blender), 'image',
- *  'video', 'wescene', 'web' or 'url'. */
-export function kindOf(choice, item) {
-  if (!choice || choice.type === 'scene') return 'scene';
-  if (choice.type === 'default' && !item) return 'scene'; // no Blender scenes yet: the 3D look
-  if (!item) return 'missing';
-  return item.type === 'scene' ? 'wescene' : item.type;
-}
-
-/** The key your settings for a wallpaper are saved under. */
-export function settingsKey(choice, item) {
-  return item ? item.id : 'scene';
-}
+const folderOf = url => url.slice(0, url.lastIndexOf('/') + 1);
 
 export class WallpaperLayer {
-  constructor(el) {
+  constructor(el, { onShaderError, onReady } = {}) {
     this.el = el;
     this.kind = null;
     this.key = '';
-    this.model = null;
+    this.player = null;
     this.paused = false;
-    this.pointer = { x: 0, y: 0 };
-    this.par = { x: 0, y: 0 };
-    window.addEventListener('pointermove', e => {
-      this.pointer.x = e.clientX / innerWidth * 2 - 1;
-      this.pointer.y = e.clientY / innerHeight * 2 - 1;
-    });
-    this.loop = this.loop.bind(this);
-    requestAnimationFrame(this.loop);
+    this.onShaderError = onShaderError;
+    this.onReady = onReady;
   }
 
-  /** Shows `choice` ({type, name|id, options}) with `settings` (fit, speed, sound…). Returns its kind. */
-  async show(choice, settings = {}) {
-    const items = choice && choice.type !== 'scene' ? await libraryItems() : [];
-    const item = itemFor(choice, items);
-    const kind = kindOf(choice, item);
-    const key = JSON.stringify([kind, item?.id]);
+  /** Shows `choice` with `settings` (fit, speed, props…). Returns its kind ('none' if nothing to show). */
+  async show(choice, settings = {}, { fresh = false, override, item: given } = {}) {
+    const item = given !== undefined ? given : itemFor(choice, await libraryItems());
+    const kind = item ? item.type : (choice?.type === 'default' ? 'none' : 'missing');
+    const key = JSON.stringify([kind, item?.id, override ? override.version : 0]);
     this.settings = settings;
-    if (key !== this.key) {
+    if (key !== this.key || fresh) {
+      const token = this.token = {};
       this.clear();
       this.key = key;
       this.kind = kind;
       this.item = item;
-      if (kind === 'model') await this.showModel(item);
-      else if (kind === 'image') this.showImage(item, settings);
-      else if (kind === 'video') this.showVideo(item, settings);
-      else if (kind === 'wescene') await this.showWeScene(item);
-      else if (kind === 'missing') this.showMissing();
+      try {
+        await this.build(kind, item, settings, override);
+      } catch (err) {
+        if (token === this.token) this.showProblem(err.message || 'This wallpaper could not be shown.');
+      }
+      if (token !== this.token) return this.kind;
+      this.onReady?.(kind, item);
     }
     this.applySettings(settings);
     this.el.dataset.kind = kind;
-    this.el.hidden = !['model', 'image', 'video', 'wescene', 'missing'].includes(kind);
+    this.el.hidden = (kind === 'web' || kind === 'url') && document.documentElement.dataset.mode === 'desktop';
     return kind;
   }
 
-  clear() {
-    this.model?.dispose();
-    this.model = null;
-    this.media = null;
-    for (const v of this.el.querySelectorAll('video')) { v.pause(); v.removeAttribute('src'); v.load(); }
-    this.el.replaceChildren();
-    this.layers = null;
-  }
-
-  async showModel(item) {
+  async build(kind, item, settings, override) {
+    if (kind === 'image') return this.showImage(item);
+    if (kind === 'video') return this.showVideo(item);
+    if (kind === 'missing') return this.showProblem('This wallpaper isn\'t in your library any more. Pick another one in Aerie Studio.');
+    if (kind === 'web' || kind === 'url') {
+      // web wallpapers play in their own sandboxed view under this page; here (Studio's preview,
+      // the lock screen) show their picture instead
+      if (document.documentElement.dataset.mode !== 'desktop' && item?.previewUrl) this.showImage({ fileUrl: item.previewUrl });
+      return null;
+    }
+    if (kind === 'none') return this.showProblem('Pick a wallpaper in Aerie Studio.', true);
     const box = document.createElement('div');
     box.className = 'wall-fill';
     this.el.appendChild(box);
-    const model = this.model = new ModelScene(box);
-    model.setPaused(this.paused);
-    this.showProblem('Loading the 3D scene…', true);
-    try {
-      this.modelInfo = await model.load(item.fileUrl);
-      this.el.querySelector('.wall-note')?.remove();
-    } catch (err) {
-      if (this.model === model) this.showProblem(err.message);
+    if (kind === 'model') {
+      const model = this.player = new ModelScene(box);
+      model.setPaused(this.paused);
+      this.showProblem('Loading the 3D scene…', true);
+      await model.load(item.fileUrl);
+      this.clearNote();
+    } else if (kind === 'shader') {
+      const view = this.player = new ShaderView(box, { onError: msg => { this.showProblem('The shader has an error:\n' + msg); this.onShaderError?.(msg, item); } });
+      const code = override?.code ?? await (await api.wallpaperFile(item.fileUrl)).text();
+      view.apply({ fps: settings.fps });
+      view.load(code, override?.properties || item.properties, override?.audio ?? item.audio);
+      view.setPaused(this.paused);
+    } else if (kind === 'parallax') {
+      const view = this.player = new ParallaxView(box);
+      const spec = override?.spec || await (await api.wallpaperFile(item.fileUrl)).json();
+      view.loadSpec(spec, folderOf(item.fileUrl));
+      view.setPaused(this.paused);
+    } else if (kind === 'scene') {
+      const view = this.player = new ParallaxView(box);
+      this.showProblem('Opening this scene for the first time…', true);
+      const info = await api.scene(item.id);
+      this.clearNote();
+      view.loadWeScene(info, item.id);
+      view.setPaused(this.paused);
+    } else if (kind === 'stage') {
+      const view = this.player = new StageView(box, { onStatus: msg => (msg ? this.showProblem(msg, true) : this.clearNote()) });
+      const spec = override?.spec || await (await api.wallpaperFile(item.fileUrl)).json();
+      view.setPaused(this.paused);
+      await view.load(spec);
     }
+    return null;
   }
 
-  showImage(item, settings) {
+  clear() {
+    this.player?.dispose?.();
+    this.player = null;
+    this.media = null;
+    for (const v of this.el.querySelectorAll('video')) { v.pause(); v.removeAttribute('src'); v.load(); }
+    this.el.replaceChildren();
+  }
+
+  showImage(item) {
     const img = document.createElement('img');
     img.className = 'wall-media';
     img.alt = '';
@@ -118,94 +130,54 @@ export class WallpaperLayer {
     if (!this.paused) v.play().catch(() => null);
   }
 
-  async showWeScene(item) {
-    const stage = document.createElement('div');
-    stage.className = 'we-stage';
-    this.el.appendChild(stage);
-    let info;
-    try {
-      this.showProblem('Opening this scene for the first time…', true);
-      info = await api.scene(item.id);
-    } catch (err) {
-      this.showProblem(err.message || 'Aerie couldn\'t read this scene.');
-      return;
-    }
-    this.el.querySelector('.wall-note')?.remove();
-    stage.style.background = info.clear || '#000';
-    this.scene = info;
-    this.layers = info.layers.map(l => {
-      const node = document.createElement(l.video ? 'video' : 'img');
-      node.className = 'we-layer';
-      node.src = `/wp/${item.id}/${encodeURIComponent(l.src)}`;
-      if (l.video) Object.assign(node, { loop: true, muted: true, autoplay: true, playsInline: true });
-      node.style.opacity = l.alpha;
-      if (l.tint && l.tint.some(c => c < 0.98)) node.style.filter = `brightness(${(l.tint[0] + l.tint[1] + l.tint[2]) / 3})`;
-      stage.appendChild(node);
-      return { node, l };
-    });
-    this.layoutScene();
-    this.onResize ||= () => this.layoutScene();
-    window.addEventListener('resize', this.onResize);
-  }
-
-  /** Places the layers like Wallpaper Engine: its scene has its own size, scaled to cover the screen. */
-  layoutScene() {
-    if (!this.layers || !this.scene) return;
-    const { width: W, height: H } = this.scene;
-    const s = Math.max(innerWidth / W, innerHeight / H);
-    const ox = (innerWidth - W * s) / 2, oy = (innerHeight - H * s) / 2;
-    for (const { node, l } of this.layers) {
-      Object.assign(node.style, {
-        left: `${ox + (l.x - l.w / 2) * s}px`, top: `${oy + (H - l.y - l.h / 2) * s}px`,
-        width: `${l.w * s}px`, height: `${l.h * s}px`,
-      });
-      node.dataset.rot = l.rotation || 0;
-    }
-  }
-
-  showMissing() {
-    this.showProblem('This wallpaper isn\'t in your library any more. Pick another one in the hub (Super+D) or Aerie Studio.');
-  }
-
   showProblem(text, soft = false) {
-    this.el.querySelector('.wall-note')?.remove();
+    this.clearNote();
     const p = document.createElement('p');
     p.className = 'wall-note' + (soft ? ' soft' : '');
     p.textContent = text;
     this.el.appendChild(p);
   }
 
-  applySettings(settings) {
+  clearNote() { this.el.querySelector('.wall-note')?.remove(); }
+
+  applySettings(s) {
     const m = this.media;
     if (m) {
-      m.style.objectFit = { cover: 'cover', fit: 'contain', stretch: 'fill', center: 'none' }[settings.fit] || 'cover';
+      m.style.objectFit = { cover: 'cover', fit: 'contain', stretch: 'fill', center: 'none' }[s.fit] || 'cover';
       if (m.tagName === 'VIDEO') {
-        m.playbackRate = Math.max(0.25, Math.min(3, settings.speed || 1));
-        m.muted = !settings.sound;
-        m.volume = Math.max(0, Math.min(1, (settings.volume ?? 50) / 100));
+        m.playbackRate = Math.max(0.25, Math.min(3, s.speed || 1));
+        m.muted = !s.sound;
+        m.volume = Math.max(0, Math.min(1, (s.volume ?? 50) / 100));
       }
     }
-    this.model?.apply({ motion: settings.motion ?? 1, speed: settings.speed ?? 1, exposure: settings.exposure ?? 1,
-      background: settings.background || '', shadows: settings.shadows !== false, fps: settings.fps || 60 });
+    this.player?.apply?.({ motion: s.motion ?? 1, speed: s.speed ?? 1, exposure: s.exposure ?? 1, background: s.background || '',
+      shadows: s.shadows !== false, fps: s.fps || 60, quality: s.quality ?? 1, props: s.props || {} });
   }
 
   setPaused(on) {
     this.paused = on;
-    this.model?.setPaused(on);
+    this.player?.setPaused(on);
     for (const v of this.el.querySelectorAll('video')) { if (on) v.pause(); else v.play().catch(() => null); }
   }
 
-  loop() {
-    requestAnimationFrame(this.loop);
-    if (this.paused || !this.layers || !this.scene) return;
-    // Wallpaper Engine's camera parallax: deeper layers move more with the mouse
-    const k = Math.min(1, 0.02 / Math.max(0.02, this.scene.parallaxDelay || 0.1));
-    this.par.x += (this.pointer.x - this.par.x) * k;
-    this.par.y += (this.pointer.y - this.par.y) * k;
-    const amount = (this.scene.parallax ? this.scene.parallaxAmount : 0.15) * (this.settings?.motion ?? 1) * (this.scene.parallaxMouse ?? 1);
-    for (const { node, l } of this.layers) {
-      const dx = -this.par.x * (l.depth?.[0] || 0) * amount * 24, dy = -this.par.y * (l.depth?.[1] || 0) * amount * 24;
-      node.style.transform = `translate(${dx}px, ${dy}px) rotate(${-(l.rotation || 0)}rad)`;
+  /** A JPEG of what's showing now (for a library preview), or null. */
+  async snapshot(width = 640) {
+    if (this.player?.drawTo) {
+      const c = document.createElement('canvas');
+      c.width = width;
+      c.height = Math.round(width * 9 / 16);
+      this.player.drawTo(c.getContext('2d'), c.width, c.height);
+      return new Promise(res => c.toBlob(res, 'image/jpeg', 0.86));
     }
+    const src = this.el.querySelector('canvas') || this.media;
+    if (!src) return null;
+    const w = src.width || src.videoWidth || src.naturalWidth, h = src.height || src.videoHeight || src.naturalHeight;
+    if (!w || !h) return null;
+    const c = document.createElement('canvas');
+    c.width = width;
+    c.height = Math.round(width * 9 / 16);
+    const s = Math.max(c.width / w, c.height / h);
+    c.getContext('2d').drawImage(src, (c.width - w * s) / 2, (c.height - h * s) / 2, w * s, h * s);
+    return new Promise(res => c.toBlob(res, 'image/jpeg', 0.86));
   }
 }

@@ -1,19 +1,22 @@
-"""Your wallpaper library: pictures, videos, web pages and Wallpaper Engine / Lively wallpapers.
+"""Your wallpaper library: every kind of wallpaper Aerie plays, and importing them.
 
 Imported files are copied to ~/.local/share/aerie/wallpapers/<id>/ so they keep working if
 the original is moved. Wallpapers you subscribed to in the Steam Workshop for Wallpaper
 Engine are used where Steam keeps them (Aerie never changes them), and show up by themselves.
 
 Kinds of wallpaper:
-  image   a picture (also animated GIF / WebP)
-  video   a looping video (mp4, webm, mkv, mov)
-  web     an HTML page in a folder (Wallpaper Engine "web" and Lively web wallpapers)
-  url     a web site, loaded live
-  scene   a Wallpaper Engine scene: its picture layers are taken out and drawn with parallax
-  model   a 3D scene made in Blender (or any 3D app) and exported as glTF (.glb / .gltf),
-          played live with its camera, lights and animations
+  image     a picture (also animated GIF / WebP / APNG, and SVG drawings)
+  video     a looping video (mp4, webm, mkv, mov)
+  web       an HTML page in a folder (Wallpaper Engine "web" and Lively web wallpapers)
+  url       a web site, loaded live
+  scene     a Wallpaper Engine scene: its picture layers are taken out and drawn with parallax
+  model     a 3D scene made in Blender (or any 3D app) and exported as glTF (.glb / .gltf),
+            played live with its camera, lights and animations
+  shader    a Shadertoy-style GLSL shader (mainImage), drawn live on the GPU
+  parallax  2D picture layers that shift with the mouse at their own depth (parallax.json)
+  stage     a 3D scene put together from free Poly Haven skies and models (stage.json)
 
-The default scenes that come with Aerie are Blender scenes in web/scenes/ (see docs/BLENDER.md).
+The wallpapers that come with Aerie are folders in web/wallpapers/ (see docs/WALLPAPERS.md).
 """
 
 import hashlib
@@ -35,11 +38,15 @@ INDEX_FILE = LIB_DIR / "index.json"
 CACHE_DIR = paths.DATA_DIR / "cache" / "scenes"
 WE_APP_ID = "431960"  # Wallpaper Engine on Steam
 
-IMAGE_EXT = {".png", ".jpg", ".jpeg", ".webp", ".gif", ".avif", ".bmp"}
+IMAGE_EXT = {".png", ".jpg", ".jpeg", ".webp", ".gif", ".avif", ".bmp", ".apng", ".svg"}
 VIDEO_EXT = {".mp4", ".webm", ".mkv", ".mov", ".m4v", ".ogv"}
 WEB_EXT = {".html", ".htm"}
 MODEL_EXT = {".glb", ".gltf"}
-DEFAULTS_DIR = paths.WEB_DIR / "scenes"
+SHADER_EXT = {".glsl", ".frag", ".fs", ".shader"}
+KINDS = ("image", "video", "web", "url", "scene", "model", "shader", "parallax", "stage")
+DEFAULTS_DIR = paths.WEB_DIR / "wallpapers"
+MAX_SHADER = 256 * 1024
+MAX_LAYERS = 16
 MAX_IMPORT = 4 * 1024 * 1024 * 1024  # 4 GB, for long 4K videos
 _ID = re.compile(r"^[a-z0-9_-]{4,64}$")
 _lock = threading.RLock()
@@ -73,7 +80,8 @@ def list_items(include_steam=True):
     with _lock:
         index = _load_index()
         items = [dict(it) for it in index["items"].values() if Path(it["root"]).exists() or it["type"] == "url"]
-        items += default_items()
+        hidden_ids = set(index.get("hidden") or [])
+        items += [d for d in default_items() if d["id"] not in hidden_ids]
         if include_steam:
             known = {it.get("workshopId") for it in items if it.get("workshopId")}
             hidden = set(index.get("hidden") or [])
@@ -82,8 +90,8 @@ def list_items(include_steam=True):
         for it in items:
             if it["id"] in hashes:
                 it["blurhash"] = hashes[it["id"]]
-    items.sort(key=lambda it: (it.get("source") != "default", -it.get("added", 0) if it.get("source") != "default" else 0,
-                               it.get("title", "").lower()))
+    items.sort(key=lambda it: (it.get("source") != "default", -it.get("added", 0) if it.get("source") != "default" else
+                               it.get("order", 99), it.get("title", "").lower()))
     return [public(it) for it in items]
 
 
@@ -91,8 +99,9 @@ def public(it):
     """What the pages see (no full paths of your files)."""
     out = {k: v for k, v in it.items() if k not in ("root",)}
     out["previewUrl"] = f"/wp/{it['id']}/{quote(it['preview'])}" if it.get("preview") else ""
-    if it["type"] in ("image", "video", "model"):
+    if it["type"] in ("image", "video", "model", "shader", "parallax", "stage"):
         out["fileUrl"] = f"/wp/{it['id']}/{quote(it['entry'])}"
+    out["editable"] = bool(it.get("copied")) and it["type"] in ("shader", "parallax", "stage")
     return out
 
 
@@ -136,7 +145,12 @@ def remove(item_id):
     with _lock:
         index = _load_index()
         if item_id.startswith("default-"):
-            return False  # the scenes that come with Aerie stay (pick another one instead)
+            # the wallpapers that come with Aerie are hidden, not deleted (Settings brings them back)
+            if any(d["id"] == item_id for d in default_items()):
+                index.setdefault("hidden", []).append(item_id)
+                _save_index(index)
+                return True
+            return False
         it = index["items"].pop(item_id, None)
         if it is None:
             if any(s["id"] == item_id for s in steam_items()):
@@ -265,13 +279,17 @@ def _import_file(src, copy):
         return _import_folder(src.parent, copy, entry=src.name)
     elif ext == ".glb":
         kind = "model"
+    elif ext in SHADER_EXT:
+        if src.stat().st_size > MAX_SHADER:
+            raise ImportError_("That shader file is too big to be a shader (over 256 KB).")
+        return create_shader(_title_from(src.stem), src.read_text(errors="replace"), source="file")
     elif ext == ".pkg":
         return _import_folder(src.parent, copy)
-    elif src.name.lower() in ("project.json", "livelyinfo.json"):
+    elif src.name.lower() in ("project.json", "livelyinfo.json", "parallax.json", "stage.json"):
         return _import_folder(src.parent, copy)
     else:
-        raise ImportError_(f"Aerie can't use {ext or 'this kind of'} files as a wallpaper. "
-                           "Try a picture, a video, an HTML page or a Wallpaper Engine folder.")
+        raise ImportError_(f"Aerie can't use {ext or 'this kind of'} files as a wallpaper. Try a picture, a video, "
+                           "a 3D scene (.glb), a shader (.glsl), an HTML page or a Wallpaper Engine folder.")
     if src.stat().st_size > MAX_IMPORT:
         raise ImportError_("That file is too big (over 4 GB).")
     item_id = _new_id()
@@ -282,7 +300,7 @@ def _import_file(src, copy):
     return _add({
         "id": item_id, "title": _title_from(src.stem), "type": kind, "source": "file", "copied": True,
         "root": str(folder), "entry": name, "preview": name if kind == "image" else "",
-        "properties": {}, "rating": "everyone", "tags": [{"image": "Picture", "video": "Video", "model": "3D scene"}[kind]],
+        "properties": {}, "rating": "everyone", "tags": [{"image": "2D", "video": "Video", "model": "3D"}[kind]],
         "added": time.time(),
     })
 
@@ -304,7 +322,7 @@ def _import_zip(src):
             raise ImportError_("This zip file is damaged.") from exc
         root = Path(tmp)
         # use the folder that holds the wallpaper (zips often have one folder inside)
-        for marker in ("project.json", "LivelyInfo.json", "index.html", "*.gltf", "*.glb"):
+        for marker in ("project.json", "LivelyInfo.json", "parallax.json", "stage.json", "shader.glsl", "index.html", "*.gltf", "*.glb"):
             found = sorted(root.rglob(marker), key=lambda p: len(p.parts))
             if found:
                 if found[0].suffix.lower() in MODEL_EXT:
@@ -339,6 +357,22 @@ def describe_folder(src, entry=None):
         return _from_wallpaper_engine(src, _read_json(project))
     if lively.is_file():
         return _from_lively(src, _read_json(lively))
+    if (src / "parallax.json").is_file():
+        spec = _read_json(src / "parallax.json")
+        return {"title": str(spec.get("title") or _title_from(src.name))[:120], "type": "parallax", "source": "folder",
+                "entry": "parallax.json", "preview": _first(src, ("preview.jpg", "preview.png", "preview.webp")),
+                "properties": {}, "rating": "everyone", "tags": ["2D"], "audio": _parallax_audio(spec)}
+    if (src / "stage.json").is_file():
+        spec = _read_json(src / "stage.json")
+        return {"title": str(spec.get("title") or _title_from(src.name))[:120], "type": "stage", "source": "folder",
+                "entry": "stage.json", "preview": _first(src, ("preview.jpg", "preview.png", "preview.webp")),
+                "properties": {}, "rating": "everyone", "tags": ["3D"]}
+    if (src / "shader.glsl").is_file():
+        code = (src / "shader.glsl").read_text(errors="replace")[:MAX_SHADER]
+        return {"title": _title_from(src.name), "type": "shader", "source": "folder", "entry": "shader.glsl",
+                "preview": _first(src, ("preview.jpg", "preview.png", "preview.webp")),
+                "properties": shader_properties(code), "rating": "everyone", "tags": ["Shader"],
+                "audio": shader_uses_audio(code)}
     if entry and Path(entry).suffix.lower() in MODEL_EXT:
         return {"title": _title_from(Path(entry).stem), "type": "model", "source": "file", "entry": entry,
                 "preview": _first(src, (Path(entry).stem + ".jpg", Path(entry).stem + ".png", "preview.jpg", "preview.png")),
@@ -403,6 +437,7 @@ def _from_wallpaper_engine(src, project):
         "tags": [str(t)[:40] for t in (project.get("tags") or [])][:8],
         "workshopId": str(project.get("workshopid") or "") or None,
         "description": _plain(str(project.get("description") or ""))[:600],
+        "audio": bool(general.get("supportsaudioprocessing")),
     }
 
 
@@ -608,31 +643,338 @@ def steam_status():
 
 
 def default_items():
-    """Blender scenes in web/scenes/: <name>.glb (or .gltf), with an optional <name>.jpg/.png
-    preview and <name>.json ({"title": …, "tagline": …, "order": 1})."""
+    """The wallpapers that come with Aerie: one folder each in web/wallpapers/, with an aerie.json
+    ({"title", "tagline", "order", "credit": {"title", "author", "license", "url"}}) next to the
+    wallpaper itself. A loose .glb or .gltf file there (a Blender scene you exported) works too."""
     out = []
     if not DEFAULTS_DIR.is_dir():
         return out
     for f in sorted(DEFAULTS_DIR.iterdir()):
-        if f.suffix.lower() not in MODEL_EXT or not f.is_file():
-            continue
-        meta = {}
-        side = f.with_suffix(".json")
-        if side.is_file():
+        slug = re.sub(r"[^a-z0-9]+", "-", f.stem.lower()).strip("-")[:40] or "wallpaper"
+        if f.is_file() and f.suffix.lower() in MODEL_EXT:
+            meta, root, it = {}, DEFAULTS_DIR, None
+            side = f.with_suffix(".json")
+            if side.is_file():
+                try:
+                    meta = json.loads(side.read_text())
+                except ValueError:
+                    meta = {}
+            it = {"type": "model", "entry": f.name, "tags": ["3D"], "properties": {},
+                  "preview": _first(DEFAULTS_DIR, (f.stem + ".jpg", f.stem + ".webp", f.stem + ".png"))}
+        elif f.is_dir() and (f / "aerie.json").is_file():
+            root = f
             try:
-                meta = json.loads(side.read_text())
-            except ValueError:
-                meta = {}
-        slug = re.sub(r"[^a-z0-9]+", "-", f.stem.lower()).strip("-")[:40] or "scene"
-        out.append({
-            "id": "default-" + slug, "title": str(meta.get("title") or _title_from(f.stem))[:120],
-            "tagline": str(meta.get("tagline") or "")[:160], "type": "model", "source": "default",
-            "root": str(DEFAULTS_DIR), "entry": f.name,
-            "preview": _first(DEFAULTS_DIR, (f.stem + ".jpg", f.stem + ".webp", f.stem + ".png")),
-            "properties": {}, "rating": "everyone", "tags": ["Aerie"], "order": meta.get("order", 99), "added": 0,
+                meta = json.loads((f / "aerie.json").read_text())
+                it = describe_folder(f, meta.get("entry")) if not meta.get("entry") or meta.get("type") != "image" else {
+                    "type": "image", "entry": meta["entry"], "tags": ["2D"], "properties": {},
+                    "preview": meta.get("preview") or meta["entry"]}
+            except (ValueError, ImportError_):
+                continue
+        else:
+            continue
+        it.update({
+            "id": "default-" + slug, "title": str(meta.get("title") or it.get("title") or _title_from(f.stem))[:120],
+            "tagline": str(meta.get("tagline") or "")[:160], "source": "default", "root": str(root),
+            "rating": "everyone", "order": meta.get("order", 99), "added": 0, "credit": _credit(meta.get("credit")),
         })
+        if meta.get("preview"):
+            it["preview"] = meta["preview"]
+        out.append(it)
     out.sort(key=lambda it: (it["order"], it["title"].lower()))
     return out
+
+
+def _credit(raw):
+    """Who made something and its license, for the credits line under a wallpaper."""
+    if not isinstance(raw, dict):
+        return None
+    out = {k: str(raw.get(k) or "")[:200] for k in ("title", "author", "license", "url", "source")}
+    if out["url"] and not re.match(r"^https?://", out["url"]):
+        out["url"] = ""
+    return out if any(out.values()) else None
+
+
+# ---- wallpapers you make in Aerie: shaders, 2D parallax and 3D stages -----------------------
+
+_UNIFORM = re.compile(r"^\s*uniform\s+(float|vec3|bool|int)\s+(\w+)\s*;\s*//\s*aerie:\s*(slider|color|bool)\s*(.*)$", re.M)
+_QUOTED = re.compile(r'"([^"]{1,80})"')
+
+
+def shader_properties(code):
+    """Settings a shader offers, from comments on its uniforms:
+        uniform float uSpeed; // aerie: slider 0 2 1 "Cloud speed"
+        uniform vec3 uSky;    // aerie: color #3a7bd5 "Sky color"
+        uniform bool uStars;  // aerie: bool 1 "Stars"
+    """
+    props = {}
+    for n, m in enumerate(_UNIFORM.finditer(code or "")):
+        gltype, name, kind, rest = m.groups()
+        label_m = _QUOTED.search(rest)
+        label = label_m.group(1) if label_m else name
+        nums = _QUOTED.sub("", rest).split()
+        item = {"type": kind, "label": label, "order": n, "uniform": name, "glsl": gltype}
+        if kind == "slider":
+            lo, hi, val = (_num(nums[i], d) if len(nums) > i else d for i, d in enumerate((0, 1, 0.5)))
+            item.update(min=lo, max=hi, value=val, step=(hi - lo) / 100 or 0.01, fraction=True)
+        elif kind == "color":
+            val = nums[0] if nums and re.match(r"^#[0-9a-fA-F]{6}$", nums[0]) else "#ffffff"
+            item["value"] = val
+        else:
+            item["value"] = bool(_num(nums[0], 1)) if nums else True
+        props[name[:60]] = item
+        if len(props) >= 24:
+            break
+    return props
+
+
+def shader_uses_audio(code):
+    return bool(re.search(r"//\s*aerie:\s*audio\b", code or ""))
+
+
+def _parallax_audio(spec):
+    return any(_num((layer or {}).get("react"), 0) > 0 for layer in (spec.get("layers") or []) if isinstance(layer, dict))
+
+
+def _own_folder(title, kind, entry, tags, extra=None, source="made"):
+    item_id = _new_id()
+    folder = LIB_DIR / item_id
+    folder.mkdir(parents=True, exist_ok=True)
+    item = {"id": item_id, "title": (str(title).strip() or "Untitled")[:120], "type": kind, "source": source,
+            "copied": True, "root": str(folder), "entry": entry, "preview": "", "properties": {}, "rating": "everyone",
+            "tags": tags, "added": time.time()}
+    item.update(extra or {})
+    return item, folder
+
+
+def create_shader(title, code, source="made", credit=None):
+    """A new shader wallpaper from GLSL code (Shadertoy's mainImage, or a whole main())."""
+    code = str(code or "")
+    if not code.strip():
+        raise ImportError_("The shader is empty.")
+    if len(code.encode()) > MAX_SHADER:
+        raise ImportError_("That shader is too long (over 256 KB).")
+    if "mainImage" not in code and not re.search(r"void\s+main\s*\(", code):
+        raise ImportError_("This doesn't look like a shader: it needs a mainImage() (Shadertoy) or main() function.")
+    item, folder = _own_folder(title, "shader", "shader.glsl", ["Shader"],
+                               {"properties": shader_properties(code), "audio": shader_uses_audio(code),
+                                "credit": _credit(credit)}, source)
+    (folder / "shader.glsl").write_text(code)
+    return _add(item)
+
+
+def update_shader(item_id, code):
+    it = _own(item_id, "shader")
+    code = str(code or "")
+    if len(code.encode()) > MAX_SHADER or not code.strip():
+        raise ImportError_("The shader is empty or too long.")
+    (Path(it["root"]) / "shader.glsl").write_text(code)
+    with _lock:
+        index = _load_index()
+        rec = index["items"][item_id]
+        rec["properties"] = shader_properties(code)
+        rec["audio"] = shader_uses_audio(code)
+        _save_index(index)
+    return public(rec)
+
+
+def create_parallax(title, spec=None, source="made", credit=None):
+    """A new, empty 2D parallax wallpaper; add pictures with add_layer()."""
+    item, folder = _own_folder(title, "parallax", "parallax.json", ["2D"], {"credit": _credit(credit)}, source)
+    clean = clean_parallax(spec or {"background": "#1d2b3a", "layers": []}, folder)
+    (folder / "parallax.json").write_text(json.dumps(clean, indent=1))
+    item["audio"] = _parallax_audio(clean)
+    return _add(item)
+
+
+def create_stage(title, spec=None, source="made", credit=None):
+    """A new 3D stage (Poly Haven sky and models); assets are added by the Poly Haven module."""
+    item, folder = _own_folder(title, "stage", "stage.json", ["3D"], {"credit": _credit(credit)}, source)
+    (folder / "stage.json").write_text(json.dumps(clean_stage(spec or {}), indent=1))
+    return _add(item)
+
+
+def _own(item_id, kind):
+    it = get(item_id)
+    if not it or it["type"] != kind or not it.get("copied"):
+        raise ImportError_("You can only change wallpapers you made or imported in Aerie.")
+    return it
+
+
+def add_layer(item_id, filename, data):
+    """Adds a picture to a 2D parallax wallpaper's folder and returns its file name."""
+    it = _own(item_id, "parallax")
+    ext = Path(filename).suffix.lower()
+    if ext not in IMAGE_EXT - {".bmp"}:
+        raise ImportError_("Layers have to be pictures (PNG with see-through parts works best).")
+    if len(data) > 64 * 1024 * 1024:
+        raise ImportError_("That picture is too big for a layer (over 64 MB).")
+    if ext == ".svg":
+        data = sanitize_svg(data.decode("utf-8", "replace")).encode()
+    folder = Path(it["root"]) / "layers"
+    folder.mkdir(exist_ok=True)
+    name = f"{uuid.uuid4().hex[:8]}-{_safe_name(Path(filename).stem)[:40]}{ext}"
+    (folder / name).write_bytes(data)
+    return "layers/" + name
+
+
+def save_spec(item_id, spec):
+    """Saves the layout of a parallax wallpaper or stage you edited in Studio."""
+    it = get(item_id)
+    if not it or it["type"] not in ("parallax", "stage") or not it.get("copied"):
+        raise ImportError_("You can only change wallpapers you made or imported in Aerie.")
+    folder = Path(it["root"])
+    if it["type"] == "parallax":
+        clean = clean_parallax(spec, folder)
+    else:
+        clean = clean_stage(spec)
+    (folder / it["entry"]).write_text(json.dumps(clean, indent=1))
+    with _lock:
+        index = _load_index()
+        rec = index["items"][item_id]
+        if isinstance(spec.get("title"), str) and spec["title"].strip():
+            rec["title"] = spec["title"].strip()[:120]
+        if it["type"] == "parallax":
+            rec["audio"] = _parallax_audio(clean)
+        _save_index(index)
+    return public(rec)
+
+
+def _color(v, default):
+    return v if isinstance(v, str) and re.match(r"^#[0-9a-fA-F]{6}$", v) else default
+
+
+def _clamp(v, lo, hi, default):
+    return max(lo, min(hi, _num(v, default)))
+
+
+def clean_parallax(spec, folder=None):
+    """Only the fields Aerie understands, with sane ranges; layer files must exist in the folder."""
+    spec = spec if isinstance(spec, dict) else {}
+    layers = []
+    for raw in (spec.get("layers") or [])[:MAX_LAYERS]:
+        if not isinstance(raw, dict):
+            continue
+        file = str(raw.get("file") or "").replace("\\", "/")
+        if not file or file.startswith("/") or ".." in file.split("/"):
+            continue
+        if folder is not None and not (Path(folder) / file).is_file():
+            continue
+        layers.append({
+            "file": file, "name": str(raw.get("name") or Path(file).stem)[:60],
+            "depth": _clamp(raw.get("depth"), 0, 1, 0.5),
+            "fit": raw.get("fit") if raw.get("fit") in ("cover", "width", "contain", "none") else "cover",
+            "align": raw.get("align") if raw.get("align") in ("top", "center", "bottom") else "bottom",
+            "x": _clamp(raw.get("x"), -100, 100, 0), "y": _clamp(raw.get("y"), -100, 100, 0),
+            "scale": _clamp(raw.get("scale"), 0.1, 4, 1), "opacity": _clamp(raw.get("opacity"), 0, 1, 1),
+            "scroll": _clamp(raw.get("scroll"), -200, 200, 0), "repeat": bool(raw.get("repeat")),
+            "sway": _clamp(raw.get("sway"), 0, 1, 0), "react": _clamp(raw.get("react"), 0, 1, 0),
+            "hidden": bool(raw.get("hidden")),
+        })
+    out = {"version": 1, "background": _color(spec.get("background"), "#1d2b3a"),
+           "background2": _color(spec.get("background2"), ""), "parallax": _clamp(spec.get("parallax"), 0, 3, 1),
+           "smoothing": _clamp(spec.get("smoothing"), 0.01, 1, 0.08), "layers": layers}
+    if isinstance(spec.get("title"), str):
+        out["title"] = spec["title"][:120]
+    return out
+
+
+_ASSET = re.compile(r"^[A-Za-z0-9_\-]{1,120}$")
+
+
+def clean_stage(spec):
+    spec = spec if isinstance(spec, dict) else {}
+
+    def vec(v, default):
+        if isinstance(v, (list, tuple)) and len(v) == 3:
+            return [round(_clamp(x, -500, 500, d), 4) for x, d in zip(v, default)]
+        return list(default)
+
+    sky = spec.get("sky") if isinstance(spec.get("sky"), dict) else {}
+    models = []
+    for raw in (spec.get("models") or [])[:24]:
+        if not isinstance(raw, dict) or not _ASSET.match(str(raw.get("asset") or "")):
+            continue
+        models.append({
+            "asset": str(raw["asset"]), "name": str(raw.get("name") or raw["asset"])[:80],
+            "res": raw.get("res") if raw.get("res") in ("1k", "2k", "4k") else "1k",
+            "position": vec(raw.get("position"), (0, 0, 0)), "rotation": vec(raw.get("rotation"), (0, 0, 0)),
+            "scale": _clamp(raw.get("scale"), 0.01, 50, 1), "spin": _clamp(raw.get("spin"), -2, 2, 0),
+            "bob": _clamp(raw.get("bob"), 0, 1, 0),
+        })
+    cam = spec.get("camera") if isinstance(spec.get("camera"), dict) else {}
+    ground = spec.get("ground") if isinstance(spec.get("ground"), dict) else {}
+    fog = spec.get("fog") if isinstance(spec.get("fog"), dict) else {}
+    out = {
+        "version": 1,
+        "sky": {"hdri": str(sky.get("hdri"))[:120] if _ASSET.match(str(sky.get("hdri") or "")) else "",
+                "res": sky.get("res") if sky.get("res") in ("1k", "2k", "4k") else "2k",
+                "rotation": _clamp(sky.get("rotation"), -360, 360, 0), "exposure": _clamp(sky.get("exposure"), 0.1, 4, 1),
+                "blur": _clamp(sky.get("blur"), 0, 1, 0), "color": _color(sky.get("color"), "#4a6a8a")},
+        "models": models,
+        "camera": {"auto": cam.get("auto", True) is not False, "position": vec(cam.get("position"), (0, 1.6, 6)),
+                   "target": vec(cam.get("target"), (0, 1, 0)), "fov": _clamp(cam.get("fov"), 15, 100, 45),
+                   "orbit": _clamp(cam.get("orbit"), -1, 1, 0.03), "parallax": _clamp(cam.get("parallax"), 0, 3, 1)},
+        "ground": {"show": bool(ground.get("show", True)), "color": _color(ground.get("color"), "#3d4a3a"),
+                   "shadows": ground.get("shadows", True) is not False},
+        "fog": {"color": _color(fog.get("color"), ""), "density": _clamp(fog.get("density"), 0, 0.2, 0)},
+    }
+    if isinstance(spec.get("title"), str):
+        out["title"] = spec["title"][:120]
+    return out
+
+
+_SVG_BAD = re.compile(r"<\s*(script|foreignObject|iframe|object|embed)\b.*?(</\s*\1\s*>|/>)", re.I | re.S)
+_SVG_EVENT = re.compile(r"\son[a-z]+\s*=\s*(\"[^\"]*\"|'[^']*'|[^\s>]+)", re.I)
+_SVG_HREF = re.compile(r"(\s(?:xlink:)?href\s*=\s*)(\"(?!#)[^\"]*\"|'(?!#)[^']*')", re.I)
+
+
+def sanitize_svg(svg):
+    """SVG drawings run no code in Aerie (they are shown as pictures), but strip anything active
+    or anything that would load from the internet anyway."""
+    svg = _SVG_BAD.sub("", svg)
+    svg = _SVG_EVENT.sub("", svg)
+    svg = _SVG_HREF.sub(r'\1"#"', svg)
+    return svg
+
+
+def set_preview(item_id, data):
+    """Keeps a preview picture Studio made of a wallpaper (for ones that came without one)."""
+    it = get(item_id)
+    if not it or not it.get("copied") or len(data) > 6 * 1024 * 1024:
+        return None
+    if data[:8] == b"\x89PNG\r\n\x1a\n":
+        name = "preview.png"
+    elif data[:3] == b"\xff\xd8\xff":
+        name = "preview.jpg"
+    elif data[:4] == b"RIFF" and data[8:12] == b"WEBP":
+        name = "preview.webp"
+    else:
+        return None
+    (Path(it["root"]) / name).write_bytes(data)
+    with _lock:
+        index = _load_index()
+        rec = index["items"].get(item_id)
+        if not rec:
+            return None
+        rec["preview"] = name
+        index.setdefault("blurhash", {}).pop(item_id, None)
+        _save_index(index)
+    return public(rec)
+
+
+def add_downloaded(path, title, credit=None, source="online"):
+    """A picture downloaded from Openverse or made by an image AI: imported like a file, with credits."""
+    item = import_path(path, copy=True)
+    with _lock:
+        index = _load_index()
+        rec = index["items"].get(item["id"])
+        if rec:
+            rec["title"] = (str(title).strip() or rec["title"])[:120]
+            rec["source"] = source
+            rec["credit"] = _credit(credit)
+            _save_index(index)
+            return public(rec)
+    return item
 
 
 # ---- scenes -----------------------------------------------------------------------------------

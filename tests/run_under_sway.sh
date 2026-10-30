@@ -36,53 +36,55 @@ shot() { sleep "${2:-4}"; grim "$OUT/$1.png" && say "screenshot $1"; }
 key() { wtype -k Shift_L -s 300 -k "$1"; }
 typ() { wtype -k Shift_L -s 300 -d 60 "$1"; }
 
-say "starting Aerie"
+restart_aerie() {
+  bin/aerie --quit
+  for _ in $(seq 20); do kill -0 "$AERIE" 2>/dev/null || break; sleep 0.5; done
+  if kill -0 "$AERIE" 2>/dev/null; then say "FAIL: --quit didn't stop Aerie"; kill "$AERIE"; sleep 2; fi
+  bin/aerie --background >>"$OUT/aerie.out" 2>&1 &
+  AERIE=$!
+  sleep 12
+}
+set_wallpaper() {  # set_wallpaper <library id>
+  python3 - "$1" <<'PY' >>"$LOG" 2>&1
+import json, os, sys
+f = os.path.expanduser("~/.config/aerie/config.json")
+cfg = json.load(open(f)) if os.path.exists(f) else {}
+cfg["wallpaper"] = {"type": "library", "id": sys.argv[1]}
+json.dump(cfg, open(f, "w"))
+print("wallpaper:", sys.argv[1])
+PY
+}
+
+say "starting Aerie (its first wallpaper is the Anime Sky shader)"
 bin/aerie --background >"$OUT/aerie.out" 2>&1 &
 AERIE=$!
-sleep 12
-shot desktop 2
+sleep 14
+shot desktop-shader 2
 if grep -q "layer-shell: True" "$HOME/.cache/aerie.log" 2>/dev/null; then say "on the desktop layer"; else say "FAIL: not on the desktop layer"; fi
 
-say "importing the test scene"
-python3 - <<'EOF' >>"$LOG" 2>&1
-import json, os, sys
+say "a Blender scene (.glb) from the library"
+python3 - <<'EOF2' >>"$LOG" 2>&1
+import os, sys
 sys.path.insert(0, os.getcwd())
 from aerie import wallpapers
 item = wallpapers.import_path("/tmp/test-scene.glb")
-cfg_file = os.path.expanduser("~/.config/aerie/config.json")
-cfg = json.load(open(cfg_file)) if os.path.exists(cfg_file) else {}
-cfg["wallpaper"] = {"type": "library", "id": item["id"]}
-json.dump(cfg, open(cfg_file, "w"))
+open("/tmp/test-scene.id", "w").write(item["id"])
 print("imported", item["id"])
-EOF
-bin/aerie --quit
-for _ in $(seq 20); do kill -0 "$AERIE" 2>/dev/null || break; sleep 0.5; done
-if kill -0 "$AERIE" 2>/dev/null; then say "FAIL: --quit didn't stop Aerie"; kill "$AERIE"; sleep 2; else say "Aerie quit"; fi
-bin/aerie --background >>"$OUT/aerie.out" 2>&1 &
-AERIE=$!
-sleep 12
-shot desktop-scene 2
+EOF2
+set_wallpaper "$(cat /tmp/test-scene.id)"
+restart_aerie
+shot desktop-model 2
 
-say "opening the hub"
-bin/aerie --hub >>"$OUT/aerie.out" 2>&1
-shot hub 3
-bin/aerie --hub --tab=wallpaper >>"$OUT/aerie.out" 2>&1
-shot hub-wallpaper 3
-bin/aerie --hub --tab=stats >>"$OUT/aerie.out" 2>&1
-shot hub-stats 3
-bin/aerie --hub --tab=apps >>"$OUT/aerie.out" 2>&1; sleep 3
-typ "vim"; sleep 2
-shot hub-apps 1
-key Escape; sleep 3
-grep "hub says" "$HOME/.cache/aerie.log" | tail -6 >>"$LOG"
-grep -q "hub says: close" "$HOME/.cache/aerie.log" && say "Esc closed the hub" || say "FAIL: Esc didn't close the hub"
-shot hub-closed 1
+say "the Rolling Hills 2D parallax"
+set_wallpaper default-rolling-hills
+restart_aerie
+shot desktop-parallax 2
 
 say "opening Aerie Studio"
 bin/aerie --studio >>"$OUT/aerie.out" 2>&1
-shot studio 6
-bin/aerie --studio --page=lock >>"$OUT/aerie.out" 2>&1
-shot studio-lock 4
+shot studio 7
+bin/aerie --studio --page=create >>"$OUT/aerie.out" 2>&1
+shot studio-create 4
 swaymsg kill >/dev/null 2>&1
 
 say "locking the screen (as a test user with a password)"

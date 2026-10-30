@@ -8,11 +8,11 @@ if "--restore-cosmic-look" in sys.argv:
     sys.exit(0)
 
 if "--undo-extras" in sys.argv:
-    # Used by ./install.sh --uninstall: remove the hub shortcuts and the lock screen choice.
+    # Used by ./install.sh --uninstall: remove the lock screen choice.
     from .server import _undo_extras
 
     _undo_extras()
-    print("Hub shortcuts and lock screen choice removed.")
+    print("Lock screen choice removed.")
     sys.exit(0)
 
 if "--windows" in sys.argv:

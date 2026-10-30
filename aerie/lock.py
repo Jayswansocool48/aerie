@@ -289,8 +289,8 @@ class LockApp(Gtk.Application):
             self.checking = True
             threading.Thread(target=self.check_password, args=(password,), daemon=True).start()
         elif kind == "power" and msg.get("action") in ("sleep", "shutdown", "restart"):
-            from . import controls
-            controls.power(msg["action"])
+            from . import power
+            power.power(msg["action"])
         elif kind == "close-preview" and self.mode == "preview":
             self.quit()
 

@@ -1,5 +1,4 @@
 // Settings model (defaults for every option) and the small API client that talks to the local server.
-import { PRESETS } from './presets.js';
 
 const params = new URLSearchParams(location.search);
 const hash = new URLSearchParams(location.hash.slice(1));
@@ -13,29 +12,8 @@ try { sessionStorage.removeItem('aerie-token'); } catch { /* storage unavailable
 
 export const uid = () => Math.random().toString(36).slice(2, 10);
 
-export const SHAPES = {
-  cube: 'Cube', sphere: 'Sphere', torus: 'Ring donut', knot: 'Torus knot', icosahedron: 'Crystal',
-  octahedron: 'Diamond', dodecahedron: 'Gem', cone: 'Pyramid', cylinder: 'Pillar', ring: 'Halo', capsule: 'Capsule',
-  tree: 'Tree', pine: 'Pine tree', rock: 'Rock', tower: 'City tower', lantern: 'Paper lantern',
-  model: 'My 3D model (.glb)',
-};
-export const MATERIALS = {
-  standard: 'Matte', glossy: 'Glossy', metal: 'Metal', glass: 'Glass', toon: 'Cartoon', wireframe: 'Wireframe',
-  emissive: 'Glowing', holo: 'Hologram',
-};
-export const BACKGROUNDS = {
-  gradient: 'Gradient', aurora: 'Aurora (animated)', mesh: 'Flowing colors (animated)', color: 'Solid color',
-  panorama: '360° sky or photo (look around)', image: 'Image', video: 'Video (loops)', transparent: 'See-through (show COSMIC wallpaper)',
-};
-export const PARTICLE_STYLES = {
-  dust: 'Floating dust', stars: 'Twinkling stars', fireflies: 'Fireflies', snow: 'Snow', rain: 'Rain', bubbles: 'Bubbles', petals: 'Falling petals',
-};
-export const CARD_STYLES = {
-  frosted: 'Frosted glass', liquid: 'Liquid glass', solid: 'Solid', outline: 'Outline', neon: 'Neon edge', clear: 'No card',
-};
-export const FONTS = {
-  sans: 'Clean (sans)', serif: 'Classic (serif)', mono: 'Code (mono)', rounded: 'Rounded', display: 'Game title', thin: 'Thin & airy',
-};
+export const CARD_STYLES = { solid: 'Solid', outline: 'Outline', clear: 'No card' };
+export const FONTS = { sans: 'Outfit', thin: 'Outfit Light', mono: 'JetBrains Mono', serif: 'Serif (system)' };
 
 export const WIDGET_GROUPS = {
   'Time': { clock: 'Clock', date: 'Date', worldclock: 'World clocks', countdown: 'Countdown', calendar: 'Calendar', timer: 'Focus timer' },
@@ -49,18 +27,6 @@ export const APP_CATEGORIES = {
   all: 'All', Game: 'Games', Development: 'Develop', Graphics: 'Graphics', Network: 'Internet',
   AudioVideo: 'Media', Office: 'Office', System: 'System', Utility: 'Utilities',
 };
-
-export function defaultObject(shape = 'icosahedron') {
-  return {
-    id: uid(), name: SHAPES[shape] || 'Object', shape, model: '', visible: true,
-    color: '#ff9e3d', material: 'glossy', glow: 0.0,
-    position: { x: 0, y: 0, z: 0 }, rotation: { x: 0, y: 0, z: 0 }, scale: 1,
-    spin: { enabled: true, x: 0.1, y: 0.35, z: 0 },
-    float: { enabled: true, amount: 0.15, speed: 0.6 },
-    interact: { dragRotate: true, hover: 'grow', lookAtMouse: false },
-    click: { type: 'none', value: '' },
-  };
-}
 
 export const WIDGET_SIZES = {
   clock: [320, 150], date: [300, 90], greeting: [420, 90], system: [300, 210], apps: [560, 460],
@@ -102,42 +68,18 @@ export function defaultWidget(type = 'clock') {
 
 export function defaultTheme() {
   return {
-    font: 'sans', accent: '#ff9e3d', text: '#f5f3ff', widgetBg: '#141022', widgetOpacity: 0.55,
-    cardStyle: 'frosted', blur: 18, radius: 20, border: true, shadow: true, tilt: true, tiltAmount: 8,
+    font: 'sans', accent: '#00bba7', text: '#e4edee', widgetBg: '#061415', widgetOpacity: 0.78,
+    cardStyle: 'solid', blur: 0, radius: 14, border: true, shadow: true, tilt: false, tiltAmount: 6,
     glow: false, iconSize: 48, entrance: true, textShadow: true,
-    widgetMotion: 'parallax', // parallax: drift with the camera · still: stay put · 3d: turn in space like a game menu
-  };
-}
-
-export function defaultScene() {
-  return {
-    background: {
-      type: 'gradient', color1: '#0b1020', color2: '#2a1240', color3: '#0e3a4a', angle: 160, image: '', video: '', dim: 0, speed: 1,
-      panorama: '', blur: 0, brightness: 1, lighting: 1, rotation: 0, credit: '', libraryId: '',
-    },
-    fog: { enabled: true, color: '#120d24', density: 0.035 },
-    particles: { enabled: true, style: 'dust', count: 900, color: '#ffd7a3', size: 0.05, speed: 0.2 },
-    floor: { enabled: false, color: '#ff9e3d' },
-    light: { ambient: 0.45, color: '#ffffff', intensity: 2.2, rim: '#7f5cff' },
-    overlay: { vignette: 0.35, grain: 0.04 },
-    sound: 'none', // the ambient soundscape that goes with this scene (plays only if turned on in Settings)
-    soundFile: '', // your own looping sound, when sound is 'custom'
-    field: { type: 'none', count: 1400, wind: 1, ground: '#3d5a1e' }, // a field of flowers or grass
+    widgetMotion: 'parallax', // parallax: drift with the wallpaper · still: stay put · 3d: turn in space
   };
 }
 
 export function defaultConfig() {
-  // a fresh start: the first Blender scene that comes with Aerie (or, if there are none, the
-  // Lantern Lake 3D look in ink and amber), with a clock and the date
-  const look = PRESETS['Lantern Lake'].build();
-  Object.assign(look.scene.background, { type: 'gradient', color1: '#090c14', color2: '#2e1d16', angle: 180 });
-  Object.assign(look.scene.fog, { color: '#191617' });
-  Object.assign(look.scene.light, { rim: '#e45a3c' });
-  if (look.scene.field) look.scene.field.ground = '#1c2836';
+  // a fresh start: the first wallpaper that comes with Aerie, with a clock and the date
   return normalizeConfig({
-    ...look, general: defaultGeneral(), wallpaper: { type: 'default' }, presetName: 'Lantern Lake',
+    wallpaper: { type: 'default' },
     widgets: [defaultWidget('clock'), Object.assign(defaultWidget('date'), { y: 26 })].map(w => Object.assign(w, { card: false, x: 5 })),
-    theme: { ...look.theme, font: 'display', cardStyle: 'solid', accent: '#e8a24a', text: '#f6efe4', widgetBg: '#1b1814', widgetOpacity: 0.72 },
   });
 }
 
@@ -146,58 +88,56 @@ export function wallpaperFor(cfg, monitor = MONITOR) {
   return (cfg.screens && cfg.screens[String(monitor)]) || cfg.wallpaper || { type: 'default' };
 }
 
+/** The library item a choice points to ('default' = the first wallpaper that comes with Aerie). */
+export function itemFor(choice, items) {
+  if (choice?.type === 'library' || (choice?.type === 'default' && choice.id)) return items.find(i => i.id === choice.id) || null;
+  if (choice?.type === 'default') return items.find(i => i.source === 'default') || null;
+  return null;
+}
+
 /** Your settings for one wallpaper (its own options, fit, speed and sound). */
 export function wallpaperSettings(cfg, key) {
-  return deepMerge({ props: {}, fit: 'cover', speed: 1, sound: false, volume: 50, motion: 1, exposure: 1, background: '', shadows: true },
+  return deepMerge({ props: {}, fit: 'cover', speed: 1, sound: false, volume: 50, motion: 1, exposure: 1, background: '', shadows: true,
+    quality: 1, react: true },
     (cfg.wallpaperProps || {})[key] || {});
 }
 
 function defaultGeneral() {
   return {
-    reducedMotion: 'system', fps: 60, editorHint: true, drawerCorner: 'none', recent: [],
-    sound: {
-      ui: true, pack: 'glass', volume: 0.4, hover: false, ambient: false, ambientVolume: 0.35, pauseForMusic: true, muted: false,
-      custom: { click: '', open: '', launch: '', notify: '', chime: '' }, // your own sound files
-    },
-    myLooks: [], // looks you saved: { id, name, thumb, data }
+    reducedMotion: 'system', fps: 60, drawerCorner: 'none', recent: [], pinned: [],
     welcomed: false,
-    lock: { source: 'scene', widgets: false, darken: 0.15, message: '', messagePos: 'bottom' }, // how the lock screen picture is made
-    matchTaskbar: 'ask',
     pauseWhen: 'maximized', // maximized · focused · never
-    libraryConsent: false,
-    hub: { hotEdge: true, tabs: ['controls', 'today', 'stats', 'clipboard', 'apps', 'wallpaper', 'power'], lastTab: 'controls', showMature: false },
-    clipboard: { enabled: false },
+    online: false,          // Openverse and Poly Haven in Studio (off until you turn it on)
+    audioReactive: true,    // wallpapers that react to sound may listen to your speakers
+    showMature: false,
     lockScreen: { clock: true, date: true, media: true, battery: true, blur: 0, dim: 0.25, message: '', power: true },
   };
 }
 
+const OLD_CARDS = { frosted: 'solid', liquid: 'solid', neon: 'outline' };
+
 export function normalizeConfig(raw) {
   if (!raw || typeof raw !== 'object') return defaultConfig();
-  const base = {
-    version: 4,
-    wallpaper: { type: 'scene' }, // a config from before wallpapers existed keeps its 3D scene
-    screens: {},
-    wallpaperProps: {},
-    scene: defaultScene(),
-    camera: { mode: 'parallax', strength: 1, smoothing: 0.06, fov: 50, distance: 9, drift: true },
-    theme: defaultTheme(),
-    general: defaultGeneral(),
-  };
+  raw = { ...raw };
+  // Aerie 2.x: the editable 3D look and its presets are gone; those setups get the default wallpaper
+  if (raw.wallpaper?.type === 'scene') raw.wallpaper = { type: 'default' };
+  for (const [k, v] of Object.entries(raw.screens || {})) if (v?.type === 'scene') delete raw.screens[k];
+  for (const k of ['scene', 'objects', 'camera', 'presetName']) delete raw[k];
+  if (raw.general && raw.general.online === undefined && raw.general.libraryConsent !== undefined) raw.general.online = !!raw.general.libraryConsent;
+  const base = { version: 5, wallpaper: { type: 'default' }, screens: {}, wallpaperProps: {}, theme: defaultTheme(), general: defaultGeneral() };
   const merged = deepMerge(base, raw);
-  merged.version = 4;
-  merged.objects = (raw.objects || []).map(o => deepMerge(defaultObject(o.shape), o));
+  merged.version = 5;
+  for (const k of ['sound', 'myLooks', 'lock', 'matchTaskbar', 'libraryConsent', 'hub', 'clipboard', 'editorHint']) delete merged.general[k];
+  merged.theme.cardStyle = OLD_CARDS[merged.theme.cardStyle] || (CARD_STYLES[merged.theme.cardStyle] ? merged.theme.cardStyle : 'solid');
+  if (!FONTS[merged.theme.font]) merged.theme.font = 'sans';
   merged.widgets = (raw.widgets || []).map(w => {
     const d = defaultWidget(w.type);
     const m = deepMerge(d, w);
     m.settings = deepMerge(d.settings, w.settings || {});
+    if (OLD_CARDS[m.cardStyle]) m.cardStyle = OLD_CARDS[m.cardStyle];
     return m;
   });
   return merged;
-}
-
-/** A preset applied on top of the person's general settings. */
-export function presetConfig(name, general) {
-  return normalizeConfig({ ...PRESETS[name].build(), general });
 }
 
 export function deepMerge(target, source) {
@@ -254,6 +194,7 @@ export const api = {
   update: () => call('POST', '/api/update'),
   restart: () => call('POST', '/api/restart'),
   shell: (action, extra) => call('POST', '/api/shell', { action, monitor: MONITOR, extra }).catch(() => null),
+  // your wallpaper library
   wallpapers: () => call('GET', '/api/wallpapers').then(d => d.items).catch(() => []),
   steam: () => call('GET', '/api/wallpapers/steam').catch(() => ({ steam: false, count: 0 })),
   scene: id => call('GET', '/api/wallpapers/scene?id=' + encodeURIComponent(id)),
@@ -264,35 +205,38 @@ export const api = {
   removeWallpaper: id => call('POST', '/api/wallpapers/remove', { id }),
   updateWallpaper: (id, changes) => call('POST', '/api/wallpapers/update', { id, ...changes }),
   unhideWallpapers: () => call('POST', '/api/wallpapers/unhide'),
-  controls: () => call('GET', '/api/controls').catch(() => ({})),
-  setControl: (name, value) => call('POST', '/api/controls', { name, value }),
-  power: action => call('POST', '/api/power', { action }),
-  stats: () => call('GET', '/api/stats').catch(() => null),
-  speedtest: () => once('speedtest', 'POST', '/api/speedtest'),
-  clipboard: (q = '', kind = 'all') => call('GET', `/api/clipboard?q=${encodeURIComponent(q)}&kind=${kind}`).catch(() => ({ items: [], available: false })),
-  clipAction: (action, id, extra = {}) => call('POST', '/api/clipboard', { action, id, ...extra }),
-  clipboardAccess: on => call('POST', '/api/system/clipboard-access', { on }),
+  // making wallpapers
+  createShader: (title, code) => once('shader:' + title + code.length, 'POST', '/api/wallpapers/shader', { title, code }).then(d => d.item),
+  updateShader: (id, code) => call('POST', '/api/wallpapers/shader', { id, code }).then(d => d.item),
+  createParallax: (title, spec) => once('parallax:' + title, 'POST', '/api/wallpapers/parallax', { title, spec }).then(d => d.item),
+  createStage: (title, spec) => once('stage:' + title, 'POST', '/api/wallpapers/stage', { title, spec }).then(d => d.item),
+  saveSpec: (id, spec) => call('POST', '/api/wallpapers/spec', { id, spec }).then(d => d.item),
+  uploadLayer: (id, file) => once(`layer:${id}:${file.name}:${file.size}`, 'POST', '/api/wallpapers/layer?id=' + encodeURIComponent(id), file,
+    { 'X-Filename': encodeURIComponent(file.name) }).then(d => d.file),
+  savePreview: (id, blob) => call('POST', '/api/wallpapers/preview?id=' + encodeURIComponent(id), blob).then(d => d.item).catch(() => null),
+  wallpaperFile: async url => { const r = await fetch(url, { cache: 'no-store' }); if (!r.ok) throw new Error('not found'); return r; },
+  // online content (only after you allowed it)
+  openverse: (q, page = 1) => call('GET', `/api/openverse?q=${encodeURIComponent(q)}&page=${page}`).then(d => d.items),
+  openverseImport: id => once('ov:' + id, 'POST', '/api/openverse/import', { id }).then(d => d.item),
+  polyhaven: (kind, q = '') => call('GET', `/api/polyhaven?kind=${kind}&q=${encodeURIComponent(q)}`).then(d => d.items),
+  polyhavenSky: id => once('sky:' + id, 'POST', '/api/polyhaven/sky', { id }).then(d => d.item),
+  polyhavenLocal: (kind, id, res) => call('GET', `/api/polyhaven/local?kind=${kind}&id=${encodeURIComponent(id)}&res=${res}`),
+  polyhavenFetch: (kind, id, res) => call('POST', '/api/polyhaven/fetch', { kind, id, res }).then(d => d.url),
+  clearCache: () => call('POST', '/api/cache/clear'),
+  // the AI
+  assistant: () => call('GET', '/api/assistant'),
+  assistantSettings: changes => call('POST', '/api/assistant/settings', changes),
+  ollamaModels: () => call('GET', '/api/assistant/ollama-models').catch(() => ({ models: [] })),
+  create: (prompt, mode, revise) => once('ai:' + mode + prompt + (revise?.id || ''), 'POST', '/api/assistant/create', { prompt, mode, revise }).then(d => d.job),
+  job: id => call('GET', '/api/assistant/job?id=' + encodeURIComponent(id)),
+  // sound and the lock screen
+  audio: () => call('GET', '/api/audio').catch(() => ({ available: false })),
   lockStatus: () => call('GET', '/api/lock/status').catch(() => ({})),
   lockInfo: () => call('GET', '/api/lock/info').catch(() => ({ name: '' })),
   setLockEnabled: on => call('POST', '/api/lock/enable', { on }),
   removeLockSwitch: () => call('POST', '/api/lock/remove-switch'),
   previewLock: () => call('POST', '/api/lock/preview'),
-  hubShortcuts: () => call('GET', '/api/hub/shortcuts').catch(() => ({ installed: false })),
-  setHubShortcuts: on => call('POST', '/api/hub/shortcuts', { on }),
-  library: kind => call('GET', '/api/library?kind=' + encodeURIComponent(kind)).then(d => d.items),
-  libraryFetch: (kind, id, resolution) => call('POST', '/api/library/fetch', { kind, id, resolution }).then(d => d.url),
-  lockscreen: () => call('GET', '/api/lockscreen').catch(() => ({ current: null })),
-  setLockscreen: req => call('POST', '/api/lockscreen', { monitor: MONITOR, ...req }),
-  setAvatar: url => call('POST', '/api/avatar', { url }),
-  lockNow: () => call('POST', '/api/lock-now').catch(() => ({ ok: false })),
-  assistant: () => call('GET', '/api/assistant'),
-  assistantSettings: changes => call('POST', '/api/assistant/settings', changes),
-  ollamaModels: () => call('GET', '/api/assistant/ollama-models').catch(() => ({ models: [] })),
-  assistantChat: (messages, context) => call('POST', '/api/assistant/chat', { messages, context }),
-  thumbnail: () => call('POST', '/api/thumbnail', { monitor: MONITOR }).then(d => d.url),
-  cosmicLook: () => call('GET', '/api/cosmic-look').catch(() => ({ available: false })),
-  setCosmicLook: changes => call('POST', '/api/cosmic-look', changes),
-  restoreCosmicLook: () => call('POST', '/api/cosmic-look/restore'),
+  lockNow: () => call('POST', '/api/lock/now').catch(() => ({ ok: false })),
   nowPlaying: () => call('GET', '/api/now-playing').catch(() => ({ available: false })),
   playerControl: action => call('POST', '/api/now-playing', { action }).catch(() => ({ ok: false })),
 };

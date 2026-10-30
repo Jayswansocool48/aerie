@@ -6,26 +6,27 @@
   <project_license>MIT</project_license>
 
   <name>Aerie</name>
-  <summary>Live wallpapers, a drop-down hub and a live lock screen</summary>
+  <summary>2D, 3D, shader and music-reactive live wallpapers</summary>
   <developer id="io.github.jayswansocool48">
     <name>Jayswansocool48</name>
   </developer>
 
   <description>
     <p>
-      Aerie brings live wallpapers to the COSMIC desktop, like Wallpaper Engine, on your desktop
-      and on your lock screen. Its default themes are 3D scenes made in Blender, played live with
-      their own camera, lights and animations, and moving with your mouse.
+      Aerie plays live wallpapers on the COSMIC desktop and lock screen, in the spirit of
+      Wallpaper Engine. Import the wallpapers you have, find free ones, or make your own.
     </p>
     <ul>
-      <li>Wallpaper Engine wallpapers from the Steam Workshop show up by themselves (video, web, picture and scene wallpapers), or add a folder or zip</li>
-      <li>Your own Blender scenes (.glb), videos, pictures, web pages and web sites, and Lively web wallpapers</li>
-      <li>A hub that drops down from the top of the screen: quick controls, today, stats with a speed test, clipboard history, apps, a wallpaper cover flow and power</li>
-      <li>A live lock screen with your wallpaper, a big clock and what's playing (optional)</li>
-      <li>Aerie Studio: your library, drag-and-drop importing, wallpaper settings, widgets, a 3D look you design yourself, and an optional design assistant (Claude, ChatGPT or a free local Ollama model)</li>
-      <li>Restyles COSMIC's real panel and dock, with one-click restore</li>
-      <li>Pauses while the app you're using is maximized or full screen, so games get full speed</li>
-      <li>No accounts, ads or tracking. Only goes online for the features you use</li>
+      <li>Pictures, animated GIFs, videos, web pages and web sites</li>
+      <li>2D parallax wallpapers whose layers move with your mouse and pulse with music</li>
+      <li>Shadertoy-style shaders, with sliders for their settings and an optional music input</li>
+      <li>3D: Blender scenes (.glb) and scenes you build from Poly Haven skies and models</li>
+      <li>Wallpaper Engine wallpapers from the Steam Workshop, a folder or a zip, and Lively web wallpapers</li>
+      <li>Discover: free public-domain pictures from Openverse and CC0 skies and models from Poly Haven, credited</li>
+      <li>An AI that finds a picture, writes a shader or builds a 3D scene from your words, using Ollama on your computer, Claude or ChatGPT</li>
+      <li>Widgets over your wallpaper and an optional live lock screen</li>
+      <li>Pauses while you use a maximized or full-screen app, so games get full speed</li>
+      <li>No accounts, ads or tracking. Online features stay off until you turn them on</li>
     </ul>
     <p>
       Made for the COSMIC desktop on Pop!_OS; works on other Wayland desktops that support
@@ -51,12 +52,12 @@
       <image>https://raw.githubusercontent.com/Jayswansocool48/aerie/main/docs/screenshots/desktop.png</image>
     </screenshot>
     <screenshot>
-      <caption>The hub drops down from the top of the screen</caption>
-      <image>https://raw.githubusercontent.com/Jayswansocool48/aerie/main/docs/screenshots/hub.png</image>
+      <caption>Aerie Studio: your library with a live preview</caption>
+      <image>https://raw.githubusercontent.com/Jayswansocool48/aerie/main/docs/screenshots/studio.png</image>
     </screenshot>
     <screenshot>
-      <caption>Aerie Studio: your wallpaper library</caption>
-      <image>https://raw.githubusercontent.com/Jayswansocool48/aerie/main/docs/screenshots/studio.png</image>
+      <caption>Make a wallpaper with the AI or by hand</caption>
+      <image>https://raw.githubusercontent.com/Jayswansocool48/aerie/main/docs/screenshots/create.png</image>
     </screenshot>
     <screenshot>
       <caption>The live lock screen</caption>
@@ -65,8 +66,8 @@
   </screenshots>
 
   <branding>
-    <color type="primary" scheme_preference="light">#f8dcae</color>
-    <color type="primary" scheme_preference="dark">#2a2346</color>
+    <color type="primary" scheme_preference="light">#a6dcdc</color>
+    <color type="primary" scheme_preference="dark">#082021</color>
   </branding>
 
   <categories>
@@ -80,12 +81,13 @@
     <keyword>3D</keyword>
     <keyword>desktop</keyword>
     <keyword>customize</keyword>
-    <keyword>taskbar</keyword>
     <keyword>AI</keyword>
     <keyword>Wallpaper Engine</keyword>
     <keyword>Blender</keyword>
+    <keyword>shader</keyword>
+    <keyword>parallax</keyword>
+    <keyword>anime</keyword>
     <keyword>lock screen</keyword>
-    <keyword>clipboard</keyword>
     <keyword>Deskscape</keyword>
   </keywords>
 
@@ -100,6 +102,19 @@
   <content_rating type="oars-1.1" />
 
   <releases>
+    <release version="3.0.0" date="2026-10-29">
+      <description>
+        <p>A new Aerie, built around wallpapers.</p>
+        <ul>
+          <li>New wallpaper types: shaders, 2D parallax, 3D scenes from Poly Haven, and music-reactive wallpapers</li>
+          <li>Discover finds free pictures, skies and 3D models online, with credits</li>
+          <li>The AI now makes wallpapers: it finds art, writes shaders and builds 3D scenes, and ChatGPT can paint</li>
+          <li>Studio redesigned, with a new teal look, filters by type and a live preview of your edits</li>
+          <li>New bundled wallpapers, all CC0 or public domain</li>
+          <li>Removed the hub, clipboard history, speed test and COSMIC restyling. Delete-data and uninstall still give back any COSMIC look an older version changed</li>
+        </ul>
+      </description>
+    </release>
     <release version="2.1.0" date="2026-10-27">
       <description>
         <p>A calmer look and faster, smoother controls.</p>

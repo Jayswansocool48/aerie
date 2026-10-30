@@ -1,12 +1,10 @@
-"""The Aerie app: the live wallpaper on every screen, the hub that drops down from the top,
-and the Aerie Studio window.
+"""The Aerie app: the live wallpaper on every screen, and the Aerie Studio window.
 
 - Wallpaper: a full-screen surface per monitor above COSMIC's wallpaper and below your
   windows (wlr-layer-shell; COSMIC offers it only to apps outside a sandbox). Web wallpapers
   run in their own sandboxed view underneath Aerie's page.
-- Hub: a panel that drops down from the top edge (Super+D, or push the mouse to the top
-  middle of the screen): quick controls, today, stats, clipboard, apps, wallpapers, power.
-- Studio: a normal window for your library, importing and every setting.
+- Studio: a normal window for your library, making wallpapers, widgets and every setting.
+- Sound: wallpapers that react to music get the sound your speakers play (see audio.py).
 Window mode (--window) shows the wallpaper in a normal window, for testing or other desktops.
 """
 
@@ -41,10 +39,8 @@ try:
 except (ValueError, ImportError):
     LayerShell = None
 
-from . import APP_ID, __version__, clipboard, cosmic_look, desktop_watch, surfaces, wallpapers  # noqa: E402
+from . import APP_ID, __version__, audio, cosmic_look, desktop_watch, surfaces, wallpapers  # noqa: E402
 from .server import AerieServer  # noqa: E402
-
-HUB_TABS = ("controls", "today", "stats", "clipboard", "apps", "wallpaper", "power")
 
 
 class AerieApp(Gtk.Application):
@@ -58,20 +54,15 @@ class AerieApp(Gtk.Application):
         self.desktop_state = {}
         self.prefs = {}
         self.rebuild_timer = 0
-        self.hub = None
         self.studio = None
-        self.edges = []
-        self.clip = None
+        self.studio_audio = False
+        self.sound = None
         self.add_main_option("window", ord("w"), GLib.OptionFlags.NONE, GLib.OptionArg.NONE,
                              "Show the wallpaper in a normal window instead of on the desktop", None)
-        self.add_main_option("hub", 0, GLib.OptionFlags.NONE, GLib.OptionArg.NONE,
-                             "Open or close the hub", None)
-        self.add_main_option("tab", 0, GLib.OptionFlags.NONE, GLib.OptionArg.STRING,
-                             "With --hub: the tab to open (controls, today, stats, clipboard, apps, wallpaper, power)", "TAB")
         self.add_main_option("studio", ord("s"), GLib.OptionFlags.NONE, GLib.OptionArg.NONE,
                              "Open Aerie Studio (also what happens when you open Aerie from the app list)", None)
         self.add_main_option("page", 0, GLib.OptionFlags.NONE, GLib.OptionArg.STRING,
-                             "With --studio: the page to open (library, wallpaper, widgets, lock, hub, settings…)", "PAGE")
+                             "With --studio: the page to open (library, discover, create, widgets, lock, settings)", "PAGE")
         self.add_main_option("background", ord("b"), GLib.OptionFlags.NONE, GLib.OptionArg.NONE,
                              "Start quietly (used when starting at login)", None)
         self.add_main_option("quit", ord("q"), GLib.OptionFlags.NONE, GLib.OptionArg.NONE,
@@ -107,15 +98,9 @@ class AerieApp(Gtk.Application):
             log("quitting (asked from the command line)")
             self.quit()
             return 0
-        hub = opts.get("tab") if opts.get("hub") else None
-        if opts.get("hub") and not hub:
-            hub = ""
         studio = opts.get("page")
         if self.server:  # already running: this is a second launch asking for something
-            if hub is not None:
-                self.toggle_hub(hub or None)
-            else:
-                self.open_studio(studio or None)
+            self.open_studio(studio or None)
             return 0
         self.debug = bool(opts.get("debug"))
         want_layer = not opts.get("window")
@@ -132,8 +117,8 @@ class AerieApp(Gtk.Application):
             self.handle_shell_request, action, monitor, extra)
         self.server.on_snapshot = self.snapshot_from_thread
         self.server.on_pick = self.pick_from_thread
-        self.clip = clipboard.Watcher(log)
-        self.server.clipboard_watcher = self.clip
+        self.sound = audio.AudioMonitor(lambda bars, tex: GLib.idle_add(self.send_sound, bars, tex), log)
+        self.server.audio_status = lambda: {"running": self.sound.running, "problem": self.sound.problem}
         self.server.start()
         surfaces.direct_connection()
         surfaces.transparent_windows()
@@ -143,10 +128,7 @@ class AerieApp(Gtk.Application):
         if self.layered:
             Gdk.Display.get_default().get_monitors().connect("items-changed", self.on_monitors_changed)
             self.watch = desktop_watch.watch(lambda state: GLib.idle_add(self.on_desktop_state, state), log)
-            self.build_edges()
-        if hub is not None:
-            GLib.timeout_add(600, lambda: self.toggle_hub(hub or None) and False)
-        elif not opts.get("background"):
+        if not opts.get("background"):
             # opened from the app list: show Studio, so you see something happen
             GLib.timeout_add(300, lambda: self.open_studio(studio or None) and False)
         log(f"started {__version__} (layer-shell: {self.layered}, monitors: {len(self.windows)})")
@@ -180,6 +162,7 @@ class AerieApp(Gtk.Application):
         win.webview = view
         win.wallpaper = None
         win.wallpaper_key = None
+        win.item = None
         win.index = index
         win.paused = None
         win.connector = monitor.get_connector() if monitor is not None else None
@@ -204,8 +187,9 @@ class AerieApp(Gtk.Application):
         for win in self.windows:
             choice = (cfg.get("screens") or {}).get(str(win.index)) or cfg.get("wallpaper") or {}
             item = None
-            if choice.get("type") == "library":
-                item = wallpapers.get(choice.get("id"))
+            if choice.get("type") in ("library", "default"):
+                item = wallpapers.get(choice.get("id")) if choice.get("id") else None
+            win.item = item
             if item and item["type"] not in ("web", "url"):
                 item = None
             settings = ((cfg.get("wallpaperProps") or {}).get(item["id"]) or {}) if item else {}
@@ -231,6 +215,7 @@ class AerieApp(Gtk.Application):
             # with no widgets on top, let the mouse reach the web wallpaper itself
             has_widgets = any(w.get("visible", True) for w in cfg.get("widgets") or [])
             win.webview.set_can_target(not (win.wallpaper and not has_widgets))
+        self.update_sound()
 
     def send_web_settings(self, win, item):
         cfg = self.server.read_config() or {}
@@ -239,137 +224,38 @@ class AerieApp(Gtk.Application):
         if win.wallpaper:
             surfaces.apply_wallpaper_settings(win.wallpaper, props, item, fps)
 
-    # ---- the hub ------------------------------------------------------------------------
-    def make_hub(self):
-        win = Gtk.Window(application=self, title="Aerie hub")
-        win.add_css_class("aerie-surface")
-        url = self.server.url_for("hub.html", monitor=-1, extra="&keys=1" if os.environ.get("AERIE_DEBUG_KEYS") else "")
-        view = surfaces.page_view(url, debug=self.debug, log=log, on_message=self.on_hub_message,
-                                  allowed_prefix=f"http://127.0.0.1:{self.server.port}/")
-        win.set_child(view)
-        win.set_focus(view)
-        win.webview = view
-        win.open = False
-        if self.layered:
-            LayerShell.init_for_window(win)
-            LayerShell.set_namespace(win, "aerie-hub")
-            LayerShell.set_layer(win, LayerShell.Layer.OVERLAY)
-            for edge in (LayerShell.Edge.TOP, LayerShell.Edge.BOTTOM, LayerShell.Edge.LEFT, LayerShell.Edge.RIGHT):
-                LayerShell.set_anchor(win, edge, True)
-            # exclusive zone 0: COSMIC keeps the hub clear of its panel and dock (safe area)
-            LayerShell.set_exclusive_zone(win, 0)
-            LayerShell.set_keyboard_mode(win, LayerShell.KeyboardMode.EXCLUSIVE)
-        else:
-            win.set_default_size(1100, 720)
-        win.connect("close-request", lambda w: (self.close_hub(), True)[1])
-        return win
-
-    def toggle_hub(self, tab=None):
-        if self.hub and self.hub.open and (not tab or tab == self.hub.tab):
-            self.close_hub()
-        else:
-            self.open_hub(tab)
-        return False
-
-    def open_hub(self, tab=None):
-        if tab not in HUB_TABS:
-            tab = None
-        if not self.hub:
-            self.hub = self.make_hub()
-        if self.layered:
-            monitor = self.pointer_monitor()
-            if monitor is not None:
-                LayerShell.set_monitor(self.hub, monitor)
-        self.hub.open = True
-        self.hub.tab = tab
-        self.hub.set_visible(True)
-        self.hub.present()
-        self.hub.webview.grab_focus()
-        surfaces.run_js(self.hub.webview, f"window.hub && window.hub.open({json.dumps(tab)})")
-        return False
-
-    def close_hub(self):
-        if not self.hub or not self.hub.open:
+    # ---- sound-reactive wallpapers ------------------------------------------------------------
+    def wants_sound(self, win):
+        """This screen shows a wallpaper that reacts to sound, and isn't paused."""
+        cfg = self.server.read_config() or {}
+        if (cfg.get("general") or {}).get("audioReactive", True) is False or win.paused:
             return False
-        self.hub.open = False
-        surfaces.run_js(self.hub.webview, "window.hub && window.hub.closing()")
-        # the page says "closed" when its spring comes to rest; hide it anyway if that never comes
-        GLib.timeout_add(900, self.hide_hub)
-        return False
+        item = win.item
+        if not item or not item.get("audio"):
+            return False
+        props = ((cfg.get("wallpaperProps") or {}).get(item["id"]) or {})
+        return props.get("react", True) is not False
 
-    def hide_hub(self):
-        if self.hub and not self.hub.open:
-            self.hub.set_visible(False)
-        return False
-
-    def on_hub_message(self, msg):
-        kind = msg.get("type")
-        log(f"hub says: {kind}" + (f" {msg.get('key')}" if kind == "key" else ""))
-        if kind == "close":
-            self.close_hub()
-        elif kind == "closed":
-            self.hide_hub()
-        elif kind == "studio":
-            self.close_hub()
-            self.open_studio(msg.get("page"))
-
-    def pointer_monitor(self):
-        """The screen the mouse is on (falls back to the first one)."""
-        display = Gdk.Display.get_default()
-        try:
-            seat = display.get_default_seat()
-            pointer = seat.get_pointer() if seat else None
-            for win in self.windows:
-                surface = win.get_surface()
-                if pointer and surface and surface.get_device_position(pointer)[0]:
-                    return display.get_monitor_at_surface(surface)
-        except (AttributeError, TypeError, GLib.Error):
-            pass
-        monitors = display.get_monitors()
-        return monitors.get_item(0) if monitors.get_n_items() else None
-
-    # ---- hot edge: push the mouse to the top middle to open the hub -------------------------
-    def build_edges(self):
-        for e in self.edges:
-            e.destroy()
-        self.edges = []
-        if not self.layered or not (self.prefs.get("hotEdge", True)):
+    def update_sound(self):
+        """Works out (on changes, not every frame) which screens get sound, and runs the capture only then."""
+        if not self.sound:
             return
-        monitors = Gdk.Display.get_default().get_monitors()
-        for i in range(monitors.get_n_items()):
-            edge = Gtk.Window(application=self, title="Aerie hub edge")
-            edge.add_css_class("aerie-surface")
-            box = Gtk.Box()
-            box.set_size_request(360, 2)
-            edge.set_child(box)
-            LayerShell.init_for_window(edge)
-            LayerShell.set_namespace(edge, "aerie-edge")
-            LayerShell.set_layer(edge, LayerShell.Layer.OVERLAY)
-            LayerShell.set_anchor(edge, LayerShell.Edge.TOP, True)
-            LayerShell.set_exclusive_zone(edge, -1)
-            LayerShell.set_keyboard_mode(edge, LayerShell.KeyboardMode.NONE)
-            LayerShell.set_monitor(edge, monitors.get_item(i))
-            motion = Gtk.EventControllerMotion()
-            motion.connect("enter", lambda *_: self.edge_entered())
-            motion.connect("leave", lambda *_: self.edge_left())
-            edge.add_controller(motion)
-            edge.present()
-            self.edges.append(edge)
-        self.edge_timer = 0
+        cfg = self.server.read_config() or {}
+        allowed = (cfg.get("general") or {}).get("audioReactive", True) is not False
+        for win in self.windows:
+            win.sound = self.wants_sound(win)
+        self.sound.set_wanted(any(w.sound for w in self.windows) or bool(self.studio_audio and allowed and self.studio))
 
-    def edge_entered(self):
-        if not getattr(self, "edge_timer", 0):
-            self.edge_timer = GLib.timeout_add(220, self.edge_fire)
-
-    def edge_left(self):
-        if getattr(self, "edge_timer", 0):
-            GLib.source_remove(self.edge_timer)
-            self.edge_timer = 0
-
-    def edge_fire(self):
-        self.edge_timer = 0
-        if not (self.hub and self.hub.open):
-            self.open_hub()
+    def send_sound(self, bars, tex):
+        payload = json.dumps(bars)
+        for win in self.windows:
+            if not getattr(win, "sound", False):
+                continue
+            surfaces.run_js(win.webview, f"window.__aerieAudio && window.__aerieAudio({payload}, '{tex}')")
+            if win.wallpaper:
+                surfaces.run_js(win.wallpaper, f"window.__aerieAudio && window.__aerieAudio({payload})")
+        if self.studio and self.studio_audio:
+            surfaces.run_js(self.studio.webview, f"window.__aerieAudio && window.__aerieAudio({payload}, '{tex}')")
         return False
 
     # ---- Aerie Studio ---------------------------------------------------------------------
@@ -394,6 +280,8 @@ class AerieApp(Gtk.Application):
 
     def on_studio_closed(self, win):
         self.studio = None
+        self.studio_audio = False
+        self.update_sound()
         return False
 
     # ---- page → shell -------------------------------------------------------------------
@@ -406,14 +294,13 @@ class AerieApp(Gtk.Application):
         elif action == "reload":
             for win in self.windows:
                 win.webview.reload()
-        elif action == "hub":
-            self.open_hub(extra if isinstance(extra, str) else None)
-        elif action == "close-hub":
-            self.close_hub()
         elif action == "studio":
             log("opening Studio")
-            self.close_hub()
             self.open_studio(extra if isinstance(extra, str) else None)
+        elif action == "studio-sound":
+            # Studio's preview shows a wallpaper that reacts to sound
+            self.studio_audio = extra == "on"
+            self.update_sound()
         elif action in ("front", "back") and self.layered:
             # "front": above your windows (app drawer or moving widgets); only the screen that asked
             layer = LayerShell.Layer.TOP if action == "front" else LayerShell.Layer.BOTTOM
@@ -430,27 +317,17 @@ class AerieApp(Gtk.Application):
             for win in self.windows:
                 if monitor is None or win.index != monitor:
                     surfaces.run_js(win.webview, "window.aerie && window.aerie.reloadConfig()")
-            for view in [self.hub.webview if self.hub else None, self.studio.webview if self.studio else None]:
-                if view:
-                    surfaces.run_js(view, "window.aeriePage && window.aeriePage.configChanged()")
+            if self.studio and monitor != -1:
+                surfaces.run_js(self.studio.webview, "window.aeriePage && window.aeriePage.configChanged()")
             self.update_web_wallpapers()
             self.apply_pause()
-            if bool(self.prefs.get("hotEdge", True)) != bool(self.edges) and self.layered:
-                self.build_edges()
-            self.clip.set_enabled(bool(self.prefs.get("clipboard")))
         return False
 
     # ---- pausing while you use apps ---------------------------------------------------------
     def load_prefs(self):
         cfg = self.server.read_config() if self.server else None
         general = (cfg or {}).get("general") or {}
-        self.prefs = {
-            "pauseWhen": general.get("pauseWhen", "maximized"),
-            "hotEdge": (general.get("hub") or {}).get("hotEdge", True),
-            "clipboard": (general.get("clipboard") or {}).get("enabled", False),
-        }
-        if self.clip:
-            self.clip.set_enabled(bool(self.prefs["clipboard"]))
+        self.prefs = {"pauseWhen": general.get("pauseWhen", "maximized")}
 
     def on_desktop_state(self, state):
         if state != self.desktop_state:
@@ -474,6 +351,7 @@ class AerieApp(Gtk.Application):
                 surfaces.run_js(win.webview, f"window.aerie && window.aerie.setPaused({json.dumps(paused)}, {json.dumps(reason)})")
                 if win.wallpaper:
                     surfaces.run_js(win.wallpaper, f"window.__aeriePause && window.__aeriePause({json.dumps(paused)})")
+        self.update_sound()
 
     def on_load_changed(self, webview, event, win):
         if event == WebKit.LoadEvent.FINISHED and win.paused:
@@ -493,7 +371,6 @@ class AerieApp(Gtk.Application):
         self.build_windows()
         for win in old:
             win.destroy()
-        self.build_edges()
         self.apply_pause()
         return False
 
@@ -517,9 +394,10 @@ class AerieApp(Gtk.Application):
         if not folder:
             filters = Gio.ListStore.new(Gtk.FileFilter)
             f = Gtk.FileFilter()
-            f.set_name("Wallpapers (pictures, videos, 3D scenes, web pages, Wallpaper Engine, zip)")
-            for pattern in ("*.png", "*.jpg", "*.jpeg", "*.webp", "*.gif", "*.avif", "*.mp4", "*.webm", "*.mkv",
-                            "*.mov", "*.glb", "*.gltf", "*.html", "*.zip", "project.json", "LivelyInfo.json"):
+            f.set_name("Wallpapers (pictures, videos, 3D scenes, shaders, web pages, Wallpaper Engine, Lively, zip)")
+            for pattern in ("*.png", "*.jpg", "*.jpeg", "*.webp", "*.gif", "*.avif", "*.apng", "*.svg", "*.mp4", "*.webm",
+                            "*.mkv", "*.mov", "*.glb", "*.gltf", "*.glsl", "*.frag", "*.fs", "*.shader", "*.html", "*.zip",
+                            "project.json", "LivelyInfo.json", "parallax.json", "stage.json"):
                 f.add_pattern(pattern)
             filters.append(f)
             dialog.set_filters(filters)
@@ -580,8 +458,8 @@ class AerieApp(Gtk.Application):
     def do_shutdown(self):
         if self.watch:
             self.watch.stop()
-        if self.clip:
-            self.clip.set_enabled(False)
+        if self.sound:
+            self.sound.set_wanted(False)
         try:
             cosmic_look.maximized_style(False)  # never leave your taskbar in its temporary look
         except OSError:
